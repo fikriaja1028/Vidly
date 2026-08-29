@@ -1,0 +1,139 @@
+﻿/*
+ * Vidly Project Original (2026)
+ * fikriaja1028 (GitHub.com/fikriaja1028)
+ * Licenced Under GPL-3.0+
+*/
+package com.fikriaja.vidly.ui.components.main
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavHostController
+import com.fikriaja.vidly.MainViewModel
+import com.fikriaja.vidly.R
+import com.fikriaja.vidly.ui.navigation.Destination
+import com.fikriaja.vidly.ui.screens.settings.UpdateViewModel
+import com.fikriaja.vidly.ui.theme.IncognitoPurple
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun VidlyTopAppBar(
+    isIncognitoMode: Boolean,
+    currentRoute: String?,
+    navController: NavHostController,
+    mainViewModel: MainViewModel,
+    updateViewModel: UpdateViewModel,
+    modifier: Modifier = Modifier
+) {
+    TopAppBar(
+        modifier = modifier,
+        windowInsets = WindowInsets(0, 0, 0, 0),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = buildAnnotatedString {
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append("Vid")
+                        }
+                        append("ly")
+                    },
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        letterSpacing = (-0.5).sp
+                    ),
+                    fontWeight = FontWeight.ExtraBold
+                )
+
+                if (isIncognitoMode) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        color = IncognitoPurple.copy(alpha = 0.8f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.incognito_label),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp
+                            ),
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        },
+        actions = {
+            if (currentRoute?.contains("Search") == false) {
+                IconButton(onClick = { navController.navigate(Destination.Search()) }) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = stringResource(R.string.search),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            
+            val updateInfo by updateViewModel.updateInfo.collectAsStateWithLifecycle()
+            val isAutoUpdateEnabled by updateViewModel.isAutoUpdateEnabled.collectAsStateWithLifecycle()
+
+            IconButton(onClick = { mainViewModel.toggleIncognitoMode() }) {
+                Icon(
+                    imageVector = if (isIncognitoMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = "Incognito Mode",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            IconButton(onClick = { navController.navigate(Destination.Settings) }) {
+                BadgedBox(
+                    badge = {
+                        if (isAutoUpdateEnabled && updateInfo.hasUpdate) {
+                            Badge(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            ) {
+                                Text("!")
+                            }
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = stringResource(R.string.settings),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
+            titleContentColor = MaterialTheme.colorScheme.onSurface
+        )
+    )
+}

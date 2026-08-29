@@ -1,4 +1,0 @@
-WHAT'S NEW IN v1.3.9
-
-Mush faster VideoPlayBack Experience.
-Performance and other Improvements.

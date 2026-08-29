@@ -1,4 +1,4 @@
-# PlayTube Release ProGuard Rules
+# Vidly Release ProGuard Rules
 
 # 1. NewPipe Extractor (Critical: uses reflection for many things)
 -keep class org.schabi.newpipe.extractor.** { *; }
@@ -39,9 +39,9 @@
 # 8. JSOUP (Often used by NewPipe)
 -keep class org.jsoup.** { *; }
 
-# 9. PlayTube Models (Keep domain models to avoid serialization issues)
--keep class com.arslandaim.playtube.domain.model.** { *; }
--keep class com.arslandaim.playtube.data.local.** { *; }
+# 9. Vidly Models (Keep domain models to avoid serialization issues)
+-keep class com.fikriaja.vidly.domain.model.** { *; }
+-keep class com.fikriaja.vidly.data.local.** { *; }
 
 # 10. Missing classes detected by R8
 -dontwarn java.beans.BeanDescriptor

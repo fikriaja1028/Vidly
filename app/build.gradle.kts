@@ -7,16 +7,16 @@ plugins {
 }
 
 android {
-    namespace = "com.arslandaim.playtube"
+    namespace = "com.fikriaja.vidly"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.arslandaim.playtube"
+        applicationId = "com.fikriaja.vidly"
         minSdk = 24
         targetSdk = 36
 
-        versionCode = 16
-        versionName = "1.4.1"
+        versionCode = 1
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -64,6 +64,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
+    // FEATURE (Biometric lock)
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
 

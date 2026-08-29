@@ -1,1 +1,0 @@
-Feature-rich YouTube client, simple fast and secure.

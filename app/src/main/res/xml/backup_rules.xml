@@ -1,13 +1,17 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+﻿<?xml version="1.0" encoding="utf-8"?><!--
+    FIX(BUG #3): Privacy hardening. Vidly is a "no tracking" app: the local
+    Room database contains the user's watch history, search history, learned
+    interest profile and subscriptions. None of that may ever leave the device
+    via cloud backup or device-to-device transfer.
+
+    allowBackup is now "false" in the manifest; these rules are kept as an
+    explicit defense-in-depth statement (and are respected if allowBackup is
+    ever re-enabled).
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="database" path="vidly_db" />
+    <exclude domain="database" path="vidly_db-wal" />
+    <exclude domain="database" path="vidly_db-shm" />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="file" path="datastore/" />
 </full-backup-content>

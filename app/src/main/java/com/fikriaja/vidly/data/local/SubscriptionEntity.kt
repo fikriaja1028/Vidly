@@ -1,0 +1,13 @@
+﻿
+package com.fikriaja.vidly.data.local
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "subscriptions")
+data class SubscriptionEntity(
+    @PrimaryKey val channelId: String,
+    val name: String,
+    val thumbnailUrl: String? = null,
+    val subscriberCount: Long? = null
+)

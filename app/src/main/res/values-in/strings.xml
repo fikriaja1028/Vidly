@@ -1,0 +1,191 @@
+<resources>
+    <string name="app_name">Vidly</string>
+
+    <!-- General -->
+    <string name="retry">Coba Lagi</string>
+    <string name="back">Kembali</string>
+    <string name="cancel">Batal</string>
+    <string name="delete">Hapus</string>
+    <string name="search">Cari</string>
+    <string name="no_internet">Tidak Ada Koneksi Internet</string>
+    <string name="error_prefix">Error: %s</string>
+    <string name="clear">Bersihkan</string>
+    <string name="close">Tutup</string>
+
+    <!-- Home -->
+    <string name="tab_for_you">Untukmu</string>
+    <string name="tab_subscriptions">Langganan</string>
+    <string name="personalized_title">Direkomendasikan Untukmu</string>
+    <string name="personalized_desc">Berdasarkan riwayat pencarianmu</string>
+    <string name="no_subscriptions_videos">Belum ada video dari langgananmu.</string>
+    <string name="no_videos_found">Tidak ada video ditemukan.</string>
+    <string name="continue_playing">Lanjutkan Putar</string>
+
+    <!-- Player -->
+    <string name="quality">Kualitas</string>
+    <string name="playback_speed">Kecepatan Putar</string>
+    <string name="description">Deskripsi</string>
+    <string name="more">Lainnya</string>
+    <string name="related_videos">Video Terkait</string>
+    <string name="download">Unduh</string>
+    <string name="downloaded">Terunduh</string>
+    <string name="like">Suka</string>
+    <string name="liked">Disukai</string>
+    <string name="save">Simpan</string>
+    <string name="saved">Tersimpan</string>
+    <string name="share">Bagikan</string>
+    <string name="info">Info</string>
+    <string name="subscribe">Berlangganan</string>
+    <string name="subscribed">Berlangganan</string>
+    <string name="auto">Otomatis</string>
+    <string name="normal_speed">Normal</string>
+    <string name="no_description">Tidak ada deskripsi tersedia</string>
+    <string name="loading">Memuat...</string>
+    <string name="toggle_subtitles">Alihkan Subtitle</string>
+    <string name="settings">Pengaturan</string>
+    <string name="waiting_for_connection">Menunggu koneksi...</string>
+
+    <!-- Library -->
+    <string name="library">Perpustakaan</string>
+    <string name="history">Riwayat</string>
+    <string name="subscriptions">Langganan</string>
+    <string name="downloads">Unduhan</string>
+    <string name="favorites">Video Disukai</string>
+    <string name="see_all">Lihat semua</string>
+    <string name="no_history">Belum ada riwayat tontonan</string>
+    <string name="no_history_desc">Video yang kamu tonton akan muncul di sini.</string>
+    <string name="no_downloads">Belum ada unduhan</string>
+    <string name="no_downloads_desc">Unduh video untuk ditonton secara offline kapan saja.</string>
+    <string name="no_favorites">Belum ada video yang disukai</string>
+    <string name="no_favorites_desc">Video yang kamu sukai akan muncul di sini.</string>
+    <string name="no_subscriptions">Belum ada langganan</string>
+    <string name="no_subscriptions_desc">Berlanggananlah ke saluran favoritmu untuk melihatnya di sini.</string>
+    <string name="no_playlists">Belum ada playlist yang disimpan</string>
+    <string name="no_playlists_desc">Playlist yang kamu simpan akan ditampilkan di sini.</string>
+    <string name="discover_videos">Temukan Video</string>
+    <string name="remove_from_favorites">Hapus dari Video Disukai</string>
+    <string name="add_to_favorites">Tambahkan ke Video Disukai</string>
+    <string name="delete_download_title">Hapus Unduhan?</string>
+    <string name="delete_download_desc">Apakah kamu yakin ingin menghapus video terunduh ini?</string>
+
+    <!-- Search -->
+    <string name="search_placeholder">Cari di Vidly</string>
+    <string name="discover_new">Temukan sesuatu yang baru</string>
+    <string name="recent_searches">Pencarian terbaru</string>
+    <string name="clear_all">Hapus semua</string>
+    <string name="sort_relevance">Semua</string>
+    <string name="sort_newest">Terbaru</string>
+    <string name="sort_most_viewed">Paling Banyak Ditonton</string>
+    <string name="sort_top_rated">Rating Tertinggi</string>
+
+    <!-- Channel & Playlist -->
+    <string name="videos">Video</string>
+    <string name="playlists">Playlist</string>
+    <string name="subscribers_hidden">Jumlah subscriber disembunyikan</string>
+    <string name="subscribers_count">%s subscriber</string>
+    <string name="playlist">Playlist</string>
+    <string name="by_author">Oleh %s</string>
+    <string name="download_all">Unduh Semua</string>
+    <string name="video_count">%s video</string>
+    <string name="background_play">Putar di Latar Belakang</string>
+    <string name="background_play_desc">Tetap putar audio saat aplikasi diminimalkan</string>
+
+    <!-- Final Audit Additions -->
+    <string name="back_online">Kembali Online</string>
+    <string name="offline_dialog_text">Kamu sedang offline. Cek unduhanmu.</string>
+    <string name="go_to_downloads">Buka Unduhan</string>
+    <string name="incognito_label">Mode Penyamaran</string>
+    <string name="smart_cleanup_title">Pembersihan Cerdas</string>
+    <string name="smart_cleanup_desc">Ini akan menghapus semua video terunduh yang sudah selesai kamu tonton (>90%).</string>
+    <string name="clean_now">Bersihkan Sekarang</string>
+    <string name="clear_history_title">Hapus riwayat tontonan?</string>
+    <string name="clear_history_desc">Apakah kamu yakin ingin menghapus seluruh riwayat tontonan? Tindakan ini tidak dapat dibatalkan.</string>
+    <string name="pause_watch_history">Jeda riwayat tontonan</string>
+    <string name="not_interested">Tidak tertarik</string>
+    <string name="up_next">Selanjutnya</string>
+    <string name="play_now">Putar Sekarang</string>
+    <string name="search_offline">Cari offline...</string>
+    <string name="duration">Durasi</string>
+    <string name="apply">Terapkan</string>
+    <string name="close_app_on_finish">Tutup aplikasi setelah selesai</string>
+    <string name="close_app_desc">Hemat baterai dengan menutup Vidly</string>
+    <string name="timer_minutes_placeholder">%d menit</string>
+    <string name="subtitles">Subtitle</string>
+    <string name="off">Mati</string>
+    <string name="history_cleared">Riwayat dihapus</string>
+    <string name="ends_at">Berakhir pada %s</string>
+    <string name="video_quality">Kualitas Video</string>
+    <string name="video">Video</string>
+    <string name="audio">Audio</string>
+    <string name="high_quality">Kualitas Tinggi</string>
+    <string name="download_quality">Kualitas Unduhan</string>
+    <string name="playlist_download_quality">Kualitas Unduhan Playlist</string>
+    <string name="auto_generated">Hasil otomatis</string>
+    <string name="app_language">Bahasa Aplikasi</string>
+    <string name="language_auto_generated">%1$s (%2$s)</string>
+
+    <!-- Sleep Timer -->
+    <string name="sleep_timer">Timer Tidur</string>
+    <string name="timer_off">Mati</string>
+    <string name="timer_15">15 menit</string>
+    <string name="timer_30">30 menit</string>
+    <string name="timer_45">45 menit</string>
+    <string name="timer_60">60 menit</string>
+    <string name="timer_end_of_video">Akhir Video</string>
+    <string name="timer_minutes_remaining">%d menit tersisa</string>
+    <string name="timer_end_of_video_active">Berhenti di akhir video</string>
+
+    <!-- Settings -->
+    <string name="about_developer">Tentang Pengembang</string>
+    <string name="developed_by">Dikembangkan oleh Fikri Aulia Imanulhaq</string>
+    <string name="fork_credit">Berdasarkan PlayTube oleh Arslan Daim (https://github.com/arslandaim-hub/PlayTube).\nDimodifikasi dan ditingkatkan oleh Fikri Aulia Imanulhaq.</string>
+    <string name="ok">OK</string>
+    <string name="confirm">Konfirmasi</string>
+    <string name="clear_all_downloads_title">Hapus semua unduhan?</string>
+    <string name="clear_all_downloads_desc">Apakah kamu yakin ingin menghapus semua video terunduh? Tindakan ini tidak dapat dibatalkan.</string>
+    <string name="clear_learned_data_title">Hapus data pembelajaran?</string>
+    <string name="clear_learned_data_desc">Ini akan menghapus semua minat pengguna yang telah dipelajari dan mengatur ulang mesin rekomendasi. Tindakan ini tidak dapat dibatalkan.</string>
+    <string name="settings_group_update">Pembaruan Aplikasi</string>
+    <string name="settings_auto_update">Periksa Otomatis Rilis GitHub</string>
+    <string name="settings_auto_update_desc">Beritahu saat versi baru tersedia di GitHub</string>
+    <string name="update_available">Pembaruan Baru Tersedia: %s</string>
+    <string name="download_from_github">Unduh dari GitHub</string>
+    <string name="settings_group_history_privacy">Riwayat &amp; Privasi</string>
+    <string name="settings_view_history">Lihat riwayat</string>
+    <string name="settings_view_history_desc">Kelola video yang telah kamu tonton</string>
+    <string name="settings_pause_search_history">Jeda riwayat pencarian</string>
+    <string name="settings_pause_search_history_desc">Saran juga akan dijeda</string>
+    <string name="settings_pip">Picture-in-Picture</string>
+    <string name="settings_pip_desc">Tetap tonton di jendela kecil</string>
+    <string name="settings_data_backup">Data &amp; Cadangan</string>
+    <string name="settings_data_backup_desc">Impor Takeout dan cadangan asli</string>
+    <string name="settings_pause_recommendations">Jeda Rekomendasi</string>
+    <string name="settings_pause_recommendations_desc">Hentikan sementara pembelajaran minatmu</string>
+    <string name="settings_clear_learned_data">Hapus data pembelajaran</string>
+    <string name="settings_clear_learned_data_desc_item">Atur ulang profil mesin rekomendasi</string>
+    <string name="settings_group_appearance_playback">Tampilan &amp; Pemutaran</string>
+    <string name="settings_material_you">Material You</string>
+    <string name="settings_material_you_desc">Menyesuaikan dengan warna tema perangkat</string>
+    <string name="system_default">Default Sistem</string>
+    <string name="settings_subtitle_styles">Gaya Subtitle</string>
+    <string name="settings_subtitle_styles_desc">Sesuaikan ukuran font dan latar belakang</string>
+    <string name="subtitle_font_size">Ukuran Font: %dsp</string>
+    <string name="subtitle_background_opacity">Opacity Latar Belakang: %d%%</string>
+    <string name="subtitle_preview">Pratinjau Subtitle</string>
+    <string name="settings_group_content">Konten</string>
+    <string name="settings_clear_downloads">Hapus semua unduhan</string>
+    <string name="settings_clear_downloads_desc">Hapus semua video offline</string>
+    <string name="settings_group_about">Tentang</string>
+    <string name="settings_about_developer">Tentang Pengembang</string>
+    <string name="settings_about_developer_desc">Informasi tentang pembuat aplikasi</string>
+    <string name="settings_view_source">Lihat kode sumber</string>
+    <string name="settings_view_source_desc">Lihat proyek di GitHub</string>
+    <string name="settings_app_version">Versi Aplikasi</string>
+
+    <!-- Import Errors -->
+    <string name="error_history_not_found">File riwayat tidak ditemukan di ZIP atau pilihan</string>
+    <string name="error_subscriptions_not_found">File langganan tidak ditemukan di ZIP atau pilihan</string>
+    <string name="error_malformed_history">File riwayat rusak</string>
+    <string name="error_malformed_csv">File langganan rusak</string>
+    <string name="importing_items">%d item diimpor...</string>
+</resources>
