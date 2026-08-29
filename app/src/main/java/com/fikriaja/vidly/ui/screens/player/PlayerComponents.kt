@@ -251,7 +251,7 @@ fun VideoHeaderSection(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "â€¢",
+                text = "•",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
@@ -632,7 +632,7 @@ fun PlaylistStack(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "${playlist.uploaderName} â€¢ ${currentIndex + 1} / ${playlist.videos.size}",
+                                text = "${playlist.uploaderName} • ${currentIndex + 1} / ${playlist.videos.size}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold

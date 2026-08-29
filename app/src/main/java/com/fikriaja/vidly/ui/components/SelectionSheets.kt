@@ -44,46 +44,50 @@ fun QualitySelectionSheet(
         onDismissRequest = onDismiss,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
-        Column(modifier = Modifier.padding(bottom = 32.dp)) {
-            Text(
-                text = stringResource(R.string.video_quality),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+        ) {
+            item {
+                Text(
+                    text = stringResource(R.string.video_quality),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             
-            LazyColumn {
-                item {
-                    ListItem(
-                        headlineContent = { 
-                            Text(
-                                text = if (preferredQuality == "Auto" && currentQuality != null) 
-                                    "Auto ($currentQuality)" 
-                                else "Auto"
-                            ) 
-                        },
-                        leadingContent = { 
-                            RadioButton(
-                                selected = preferredQuality == "Auto",
-                                onClick = null 
-                            ) 
-                        },
-                        modifier = Modifier.clickable { onQualitySelected(null) }
-                    )
-                }
+            item {
+                ListItem(
+                    headlineContent = { 
+                        Text(
+                            text = if (preferredQuality == "Auto" && currentQuality != null) 
+                                "Auto ($currentQuality)" 
+                            else "Auto"
+                        ) 
+                    },
+                    leadingContent = { 
+                        RadioButton(
+                            selected = preferredQuality == "Auto",
+                            onClick = null 
+                        ) 
+                    },
+                    modifier = Modifier.clickable { onQualitySelected(null) }
+                )
+            }
 
-                items(videoStreams) { stream ->
-                    ListItem(
-                        headlineContent = { Text(text = "${stream.quality} (${stream.format})") },
-                        leadingContent = { 
-                            RadioButton(
-                                selected = preferredQuality == stream.quality,
-                                onClick = null 
-                            ) 
-                        },
-                        modifier = Modifier.clickable { onQualitySelected(stream) }
-                    )
-                }
+            items(videoStreams) { stream ->
+                ListItem(
+                    headlineContent = { Text(text = "${stream.quality} (${stream.format})") },
+                    leadingContent = { 
+                        RadioButton(
+                            selected = preferredQuality == stream.quality,
+                            onClick = null 
+                        ) 
+                    },
+                    modifier = Modifier.clickable { onQualitySelected(stream) }
+                )
             }
         }
     }
@@ -102,27 +106,31 @@ fun PlaybackSpeedSelectionSheet(
         onDismissRequest = onDismiss,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
-        Column(modifier = Modifier.padding(bottom = 32.dp)) {
-            Text(
-                text = stringResource(R.string.playback_speed),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+        ) {
+            item {
+                Text(
+                    text = stringResource(R.string.playback_speed),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             
-            LazyColumn {
-                items(speeds) { speed ->
-                    ListItem(
-                        headlineContent = { Text(text = if (speed == 1.0f) stringResource(R.string.normal_speed) else "${speed}x") },
-                        leadingContent = { 
-                            RadioButton(
-                                selected = speed == currentSpeed,
-                                onClick = null 
-                            ) 
-                        },
-                        modifier = Modifier.clickable { onSpeedSelected(speed) }
-                    )
-                }
+            items(speeds) { speed ->
+                ListItem(
+                    headlineContent = { Text(text = if (speed == 1.0f) stringResource(R.string.normal_speed) else "${speed}x") },
+                    leadingContent = { 
+                        RadioButton(
+                            selected = speed == currentSpeed,
+                            onClick = null 
+                        ) 
+                    },
+                    modifier = Modifier.clickable { onSpeedSelected(speed) }
+                )
             }
         }
     }
@@ -141,27 +149,31 @@ fun PitchSelectionSheet(
         onDismissRequest = onDismiss,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
-        Column(modifier = Modifier.padding(bottom = 32.dp)) {
-            Text(
-                text = "Audio Pitch",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+        ) {
+            item {
+                Text(
+                    text = "Audio Pitch",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             
-            LazyColumn {
-                items(pitches) { pitch ->
-                    ListItem(
-                        headlineContent = { Text(text = if (pitch == 1.0f) "Normal" else "${pitch}x") },
-                        leadingContent = { 
-                            RadioButton(
-                                selected = pitch == currentPitch,
-                                onClick = null 
-                            ) 
-                        },
-                        modifier = Modifier.clickable { onPitchSelected(pitch) }
-                    )
-                }
+            items(pitches) { pitch ->
+                ListItem(
+                    headlineContent = { Text(text = if (pitch == 1.0f) "Normal" else "${pitch}x") },
+                    leadingContent = { 
+                        RadioButton(
+                            selected = pitch == currentPitch,
+                            onClick = null 
+                        ) 
+                    },
+                    modifier = Modifier.clickable { onPitchSelected(pitch) }
+                )
             }
         }
     }
@@ -242,57 +254,61 @@ fun SubtitleSelectionSheet(
         onDismissRequest = onDismiss,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
-        Column(modifier = Modifier.padding(bottom = 32.dp)) {
-            Text(
-                text = stringResource(R.string.subtitles),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+        ) {
+            item {
+                Text(
+                    text = stringResource(R.string.subtitles),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             
-            LazyColumn {
-                item {
-                    ListItem(
-                        headlineContent = { Text(text = stringResource(R.string.off)) },
-                        leadingContent = { 
-                            RadioButton(
-                                selected = !isCcEnabled,
-                                onClick = null 
-                            ) 
-                        },
-                        modifier = Modifier.clickable { onLanguageSelected(null) }
-                    )
-                }
-                
-                items(subtitles) { subtitle ->
-                    val locale = java.util.Locale.forLanguageTag(subtitle.languageTag)
-                    val languageName = locale.displayLanguage.replaceFirstChar { it.uppercase() }
-                    ListItem(
-                        headlineContent = { 
-                            Text(text = if (subtitle.isAutoGenerated) stringResource(R.string.language_auto_generated, languageName, stringResource(R.string.auto_generated)) else languageName) 
-                        },
-                        supportingContent = { Text(text = subtitle.languageTag) },
-                        leadingContent = { 
-                            RadioButton(
-                                selected = isCcEnabled && subtitle.languageTag == currentLanguage,
-                                onClick = null 
-                            ) 
-                        },
-                        // FEATURE (Subtitle downloads)
-                        trailingContent = {
-                            if (onDownloadSubtitle != null) {
-                                IconButton(onClick = { onDownloadSubtitle(subtitle) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Download,
-                                        contentDescription = "Download subtitle",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+            item {
+                ListItem(
+                    headlineContent = { Text(text = stringResource(R.string.off)) },
+                    leadingContent = { 
+                        RadioButton(
+                            selected = !isCcEnabled,
+                            onClick = null 
+                        ) 
+                    },
+                    modifier = Modifier.clickable { onLanguageSelected(null) }
+                )
+            }
+            
+            items(subtitles) { subtitle ->
+                val locale = java.util.Locale.forLanguageTag(subtitle.languageTag)
+                val languageName = locale.displayLanguage.replaceFirstChar { it.uppercase() }
+                ListItem(
+                    headlineContent = { 
+                        Text(text = if (subtitle.isAutoGenerated) stringResource(R.string.language_auto_generated, languageName, stringResource(R.string.auto_generated)) else languageName) 
+                    },
+                    supportingContent = { Text(text = subtitle.languageTag) },
+                    leadingContent = { 
+                        RadioButton(
+                            selected = isCcEnabled && subtitle.languageTag == currentLanguage,
+                            onClick = null 
+                        ) 
+                    },
+                    // FEATURE (Subtitle downloads)
+                    trailingContent = {
+                        if (onDownloadSubtitle != null) {
+                            IconButton(onClick = { onDownloadSubtitle(subtitle) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = "Download subtitle",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
-                        },
-                        modifier = Modifier.clickable { onLanguageSelected(subtitle.languageTag) }
-                    )
-                }
+                        }
+                    },
+                    modifier = Modifier.clickable { onLanguageSelected(subtitle.languageTag) }
+                )
             }
         }
     }
@@ -311,52 +327,60 @@ fun AddToPlaylistSheet(
         onDismissRequest = onDismiss,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
-        Column(modifier = Modifier.padding(bottom = 32.dp)) {
-            Text(
-                text = "Add to Playlist",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+        ) {
+            item {
+                Text(
+                    text = "Add to Playlist",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             
-            ListItem(
-                headlineContent = { Text("Create New Playlist") },
-                leadingContent = { Icon(Icons.Default.Add, null) },
-                modifier = Modifier.clickable { onCreateNewPlaylist() }
-            )
+            item {
+                ListItem(
+                    headlineContent = { Text("Create New Playlist") },
+                    leadingContent = { Icon(Icons.Default.Add, null) },
+                    modifier = Modifier.clickable { onCreateNewPlaylist() }
+                )
+            }
             
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            }
             
-            LazyColumn {
-                items(playlists) { playlist ->
-                    val isAdded = playlistsWithVideo.contains(playlist.id)
-                    ListItem(
-                        headlineContent = { 
+            items(playlists) { playlist ->
+                val isAdded = playlistsWithVideo.contains(playlist.id)
+                ListItem(
+                    headlineContent = { 
+                        Text(
+                            text = playlist.name,
+                            fontWeight = if (isAdded) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isAdded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        ) 
+                    },
+                    leadingContent = { 
+                        Icon(
+                            imageVector = if (isAdded) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.PlaylistPlay, 
+                            contentDescription = null,
+                            tint = if (isAdded) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                        ) 
+                    },
+                    trailingContent = {
+                        if (isAdded) {
                             Text(
-                                text = playlist.name,
-                                fontWeight = if (isAdded) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isAdded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            ) 
-                        },
-                        leadingContent = { 
-                            Icon(
-                                imageVector = if (isAdded) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.PlaylistPlay, 
-                                contentDescription = null,
-                                tint = if (isAdded) MaterialTheme.colorScheme.primary else LocalContentColor.current
-                            ) 
-                        },
-                        trailingContent = {
-                            if (isAdded) {
-                                Text(
-                                    text = "Added",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        },
-                        modifier = Modifier.clickable(enabled = !isAdded) { onPlaylistSelected(playlist) }
-                    )
-                }
+                                text = "Added",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
+                    modifier = Modifier.clickable(enabled = !isAdded) { onPlaylistSelected(playlist) }
+                )
             }
         }
     }
@@ -374,28 +398,32 @@ fun PlaylistDownloadSelectionSheet(
         onDismissRequest = onDismiss,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
-        Column(modifier = Modifier.padding(bottom = 32.dp)) {
-            Text(
-                text = stringResource(R.string.playlist_download_quality),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+        ) {
+            item {
+                Text(
+                    text = stringResource(R.string.playlist_download_quality),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             
-            LazyColumn {
-                items(options) { quality ->
-                    ListItem(
-                        headlineContent = { Text(text = quality) },
-                        leadingContent = { 
-                            Icon(
-                                imageVector = if (quality == "1080p" || quality == "4K") Icons.Default.HighQuality else Icons.Default.VideoFile,
-                                contentDescription = null,
-                                tint = if (quality == "1080p" || quality == "4K") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        modifier = Modifier.clickable { onDownload(quality) }
-                    )
-                }
+            items(options) { quality ->
+                ListItem(
+                    headlineContent = { Text(text = quality) },
+                    leadingContent = { 
+                        Icon(
+                            imageVector = if (quality == "1080p" || quality == "4K") Icons.Default.HighQuality else Icons.Default.VideoFile,
+                            contentDescription = null,
+                            tint = if (quality == "1080p" || quality == "4K") MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    modifier = Modifier.clickable { onDownload(quality) }
+                )
             }
         }
     }
@@ -413,46 +441,50 @@ fun LanguageSelectionSheet(
         onDismissRequest = onDismiss,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
-        Column(modifier = Modifier.padding(bottom = 32.dp)) {
-            Text(
-                text = stringResource(R.string.app_language),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+        ) {
+            item {
+                Text(
+                    text = stringResource(R.string.app_language),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             
-            LazyColumn {
-                item {
-                    ListItem(
-                        headlineContent = { Text(text = "System Default") },
-                        leadingContent = { 
-                            RadioButton(
-                                selected = currentLanguageTag == null || currentLanguageTag == "",
-                                onClick = null 
-                            ) 
-                        },
-                        modifier = Modifier.clickable { onLanguageSelected(null) }
-                    )
-                }
-                
-                items(availableLocales) { locale ->
-                    val tag = locale.toLanguageTag()
-                    ListItem(
-                        headlineContent = { 
-                            Text(text = locale.getDisplayLanguage(locale).replaceFirstChar { it.uppercase() }) 
-                        },
-                        supportingContent = { 
-                            Text(text = locale.getDisplayLanguage(java.util.Locale.ENGLISH))
-                        },
-                        leadingContent = { 
-                            RadioButton(
-                                selected = currentLanguageTag == tag,
-                                onClick = null 
-                            ) 
-                        },
-                        modifier = Modifier.clickable { onLanguageSelected(tag) }
-                    )
-                }
+            item {
+                ListItem(
+                    headlineContent = { Text(text = "System Default") },
+                    leadingContent = { 
+                        RadioButton(
+                            selected = currentLanguageTag == null || currentLanguageTag == "",
+                            onClick = null 
+                        ) 
+                    },
+                    modifier = Modifier.clickable { onLanguageSelected(null) }
+                )
+            }
+            
+            items(availableLocales) { locale ->
+                val tag = locale.toLanguageTag()
+                ListItem(
+                    headlineContent = { 
+                        Text(text = locale.getDisplayLanguage(locale).replaceFirstChar { it.uppercase() }) 
+                    },
+                    supportingContent = { 
+                        Text(text = locale.getDisplayLanguage(java.util.Locale.ENGLISH))
+                    },
+                    leadingContent = { 
+                        RadioButton(
+                            selected = currentLanguageTag == tag,
+                            onClick = null 
+                        ) 
+                    },
+                    modifier = Modifier.clickable { onLanguageSelected(tag) }
+                )
             }
         }
     }

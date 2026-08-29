@@ -379,34 +379,44 @@ class VideoDownloadService : Service() {
         else -> "mp4"
     }
 
+    private fun parseQualityInt(q: String): Int {
+        val m = Regex("""(\d+)\s*p""", RegexOption.IGNORE_CASE).find(q)
+        if (m != null) return m.groupValues[1].toIntOrNull() ?: 0
+        return Regex("""\d+""").find(q)?.value?.toIntOrNull() ?: 0
+    }
+
     private suspend fun fetchStreamMetadata(videoId: String, preferredQuality: String?): StreamMetadata? {
         return try {
             val bundle = videoRepository.getStreamBundle(videoId)
-            
+
             // FEATURE (Audio downloads): "Audio" quality missions resolve the best
-            // audio track only â€” no video stream is needed.
+            // audio track only — no video stream is needed.
             if (preferredQuality == "Audio") {
                 val bestAudio = bundle.audioStreams
                     .filter { it.trackType == "ORIGINAL" }
-                    .maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
-                    ?: bundle.audioStreams.maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
+                    .maxByOrNull { parseQualityInt(it.quality) }
+                    ?: bundle.audioStreams.maxByOrNull { parseQualityInt(it.quality) }
                     ?: return null
                 val audioFormat = if (bestAudio.format.contains("webm", ignoreCase = true) ||
                                        bestAudio.format.contains("opus", ignoreCase = true)) "opus" else "m4a"
                 return StreamMetadata(videoUrl = null, audioUrl = bestAudio.url, format = audioFormat, quality = "Audio")
             }
-            
+
+            val prefRes = preferredQuality?.let { parseQualityInt(it) } ?: 0
             val videoStream = if (!preferredQuality.isNullOrBlank()) {
-                bundle.videoStreams.find { it.quality.contains(preferredQuality, ignoreCase = true) }
-                    ?: bundle.videoStreams.filter { 
-                        val res = it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0
-                        val prefRes = preferredQuality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0
-                        res in 1..prefRes 
-                    }.maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
-                    ?: bundle.videoStreams.firstOrNull()
+                // FIX(quality tidak sesuai): was `contains` → "720p" matched "720p60" arbitrarily,
+                // and fallback `res in 1..prefRes` could pick any stream; now use numeric match
+                bundle.videoStreams.find { it.quality.equals(preferredQuality.trim(), ignoreCase = true) }
+                    ?: bundle.videoStreams.find { parseQualityInt(it.quality) == prefRes }
+                    ?: bundle.videoStreams.filter { parseQualityInt(it.quality) in 1..prefRes }
+                        .maxByOrNull { parseQualityInt(it.quality) }
+                    // If pref is higher than all available (e.g. 4K request but max 1080p), give best available
+                    ?: bundle.videoStreams.maxByOrNull { parseQualityInt(it.quality) }
             } else {
-                bundle.videoStreams.find { it.quality.contains("360") }
-                    ?: bundle.videoStreams.find { it.quality.contains("480") }
+                // Prefer lowest muxed for auto playlist; fallback to lowest available
+                bundle.videoStreams.filter { !it.isAdaptive }
+                    .minByOrNull { parseQualityInt(it.quality) }
+                    ?: bundle.videoStreams.minByOrNull { parseQualityInt(it.quality) }
                     ?: bundle.videoStreams.firstOrNull()
             }
 
@@ -418,26 +428,39 @@ class VideoDownloadService : Service() {
             val audioUrl = if (videoStream.isAdaptive) {
                 val compatibleStreams = bundle.audioStreams.filter { audio ->
                     if (isWebm) {
-                        audio.format.contains("webm", ignoreCase = true) || 
+                        audio.format.contains("webm", ignoreCase = true) ||
                         audio.format.contains("opus", ignoreCase = true)
                     } else {
-                        audio.format.contains("m4a", ignoreCase = true) || 
+                        audio.format.contains("m4a", ignoreCase = true) ||
                         audio.format.contains("aac", ignoreCase = true)
                     }
                 }
 
                 val bestAudio = compatibleStreams.filter { it.trackType == "ORIGINAL" }
-                    .maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
-                    ?: compatibleStreams.maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
-                
+                    .maxByOrNull { parseQualityInt(it.quality) }
+                    ?: compatibleStreams.maxByOrNull { parseQualityInt(it.quality) }
+
                 bestAudio?.url
             } else null
 
             if (videoStream.isAdaptive && audioUrl == null) {
-                val progressiveStream = bundle.videoStreams.find { !it.isAdaptive }
-                if (progressiveStream != null) {
-                    return StreamMetadata(progressiveStream.url, null, progressiveStream.format, progressiveStream.quality)
+                // FIX(720p jadi burik): was `find{!isAdaptive}` → first progressive arbitrarily
+                // (often 360p) → 720p request silently downloaded as 360p. Now pick
+                // the best progressive resolution <= requested prefRes so 720p keeps 720p
+                // muxed if exists, otherwise highest below 720p.
+                val progressiveCandidates = bundle.videoStreams.filter { !it.isAdaptive }
+                val fallback = if (prefRes > 0) {
+                    progressiveCandidates.filter { parseQualityInt(it.quality) in 1..prefRes }
+                        .maxByOrNull { parseQualityInt(it.quality) }
+                        ?: progressiveCandidates.maxByOrNull { parseQualityInt(it.quality) }
+                } else {
+                    progressiveCandidates.maxByOrNull { parseQualityInt(it.quality) }
                 }
+                if (fallback != null) {
+                    VidlyLog.w("VideoDownloadService", "No compatible audio for ${videoStream.quality} (${format}); falling back to progressive ${fallback.quality}")
+                    return StreamMetadata(fallback.url, null, fallback.format, fallback.quality)
+                }
+                VidlyLog.e("VideoDownloadService", "Adaptive ${videoStream.quality} has no audio and no progressive fallback")
                 return null
             }
 

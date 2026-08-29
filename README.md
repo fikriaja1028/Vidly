@@ -71,7 +71,7 @@ This project is a **modified fork** of the original <a href="https://github.com/
 - **Biometric app lock** – full‑screen lock with fingerprint/face unlock (falls back gracefully if no authenticator is registered).
 
 > These changes make Vidly more stable, private, and feature‑complete than the original PlayTube.
-
+> Look at the [Full Changelog](./Changelog.md) to see all the update details.
 ---
 
 ## Features

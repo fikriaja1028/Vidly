@@ -163,6 +163,7 @@ class ParallelDownloader(
                     val buffer = ByteArray(64 * 1024)
                     var read: Int
                     var currentChunkProgress = persistedChunk.bytesDownloaded
+                    var bytesSinceCheckpoint = 0L
                     
                     body.byteStream().use { input ->
                         while (input.read(buffer).also { read = it } != -1) {

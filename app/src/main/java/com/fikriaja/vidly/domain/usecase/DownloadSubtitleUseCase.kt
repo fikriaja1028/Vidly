@@ -49,15 +49,39 @@ class DownloadSubtitleUseCase @Inject constructor(
                     .header("User-Agent", com.fikriaja.vidly.utils.Constants.DEFAULT_USER_AGENT)
                     .build()
 
-                val body = okHttpClient.newCall(request).execute().use { response ->
+                // FIX(encoding mojibake): read raw bytes and decode as UTF-8 explicitly.
+                // Using response.body.string() relies on Content-Type charset header;
+                // if server omits charset OkHttp may guess, and any mis-guess (ISO-8859-1
+                // vs UTF-8) turns • (E2 80 A2) into •. Read bytes → decode UTF-8 and
+                // strip BOM.
+                val rawBody = okHttpClient.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
                         return@withContext Result.failure(Exception("Subtitle download failed: HTTP ${response.code}"))
                     }
-                    response.body?.string() ?: return@withContext Result.failure(Exception("Empty subtitle body"))
+                    val bytes = response.body?.bytes() ?: return@withContext Result.failure(Exception("Empty subtitle body"))
+                    // Try Content-Type charset if present, else force UTF-8 (WebVTT is always UTF-8)
+                    val contentType = response.header("Content-Type")
+                    val charset = try {
+                        contentType?.substringAfter("charset=", "")?.substringBefore(";")?.trim()?.let {
+                            if (it.isNotBlank()) charset(it) else Charsets.UTF_8
+                        } ?: Charsets.UTF_8
+                    } catch (_: Exception) { Charsets.UTF_8 }
+                    var text = String(bytes, charset)
+                    // Strip UTF-8 BOM if present (EF BB BF)
+                    if (text.startsWith("\uFEFF")) text = text.removePrefix("\uFEFF")
+                    // If we decoded with non-UTF8 but content is actually UTF-8, re-decode as UTF-8
+                    // Heuristic: if text contains mojibake pattern • but raw bytes decode as valid UTF-8 with bullet, prefer UTF-8
+                    if (charset != Charsets.UTF_8 && text.contains("â€")) {
+                        val utf8Try = String(bytes, Charsets.UTF_8).let { if (it.startsWith("\uFEFF")) it.removePrefix("\uFEFF") else it }
+                        if (utf8Try.contains("WEBVTT")) text = utf8Try
+                    }
+                    text
                 }
+                val body = rawBody
 
-                if (!body.startsWith("WEBVTT")) {
-                    return@withContext Result.failure(Exception("Server did not return a WebVTT subtitle"))
+                // Allow BOM-prefixed WEBVTT
+                if (!body.trimStart('\uFEFF').trimStart().startsWith("WEBVTT")) {
+                    return@withContext Result.failure(Exception("Server did not return a WebVTT subtitle (got: ${body.take(20).replace("\n","\\n")})"))
                 }
 
                 val safeTitle = videoTitle.replace(Regex("[\\\\/:?*\"<>|]"), "_").trim().take(60)

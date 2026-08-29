@@ -19,7 +19,7 @@ import com.fikriaja.vidly.utils.VideoUtils
 
 /**
  * Reusable metadata row for video list items.
- * Displays: Channel Name â€¢ Views â€¢ Upload Date
+ * Displays: Channel Name • Views • Upload Date
  */
 @Composable
 fun VideoMetadata(
@@ -56,7 +56,7 @@ fun VideoMetadata(
         // Views (Always shown as long as count is 0 or more, but adds bullet if uploader exists)
         val formattedViews = VideoUtils.formatViewCount(viewCount)
         Text(
-            text = if (hasUploader) " â€¢ $formattedViews" 
+            text = if (hasUploader) " • $formattedViews" 
                    else if (viewCount == -1L) formattedViews
                    else "$formattedViews views",
             style = MaterialTheme.typography.bodySmall,
@@ -67,7 +67,7 @@ fun VideoMetadata(
         // Upload Date
         if (hasUploadDate) {
             Text(
-                text = " â€¢ ${VideoUtils.formatUploadDate(uploadDate)}",
+                text = " • ${VideoUtils.formatUploadDate(uploadDate)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 maxLines = 1

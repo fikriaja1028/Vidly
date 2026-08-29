@@ -227,6 +227,10 @@ fun DownloadsScreen(
                 EmptySectionPlaceholder("No results found for \"$searchQuery\"")
             }
         } else {
+            val (audioDownloads, videoDownloads) = remember(downloads) {
+                downloads.partition { it.quality == "Audio" }
+            }
+
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
@@ -234,58 +238,98 @@ fun DownloadsScreen(
                     bottom = 100.dp
                 )
             ) {
-                val groupedDownloads = downloads.groupBy { it.playlistId }
-                val singleVideos = groupedDownloads[null] ?: emptyList()
-                val playlistsGroup = groupedDownloads.filterKeys { it != null }
-
-                playlistsGroup.forEach { (playlistId, playlistVideos) ->
+                // 1. Videos Section
+                if (videoDownloads.isNotEmpty()) {
                     item {
-                        val title = playlistVideos.firstOrNull()?.playlistTitle ?: "Playlist"
-                        val isExpanded = expandedPlaylistId == playlistId
-                        
-                        PlaylistDownloadRow(
-                            title = title,
-                            videoCount = playlistVideos.size,
-                            thumbnailUrl = playlistVideos.firstOrNull()?.thumbnailUrl ?: "",
-                            isExpanded = isExpanded,
-                            onClick = {
-                                expandedPlaylistId = if (isExpanded) null else playlistId
-                            }
-                        )
+                        DownloadSectionTitle(stringResource(R.string.video))
                     }
-                    
-                    if (expandedPlaylistId == playlistId) {
-                        items(playlistVideos) { download ->
-                            DownloadItemRow(
-                                download = download,
-                                isSaved = savedVideoIds.contains(download.videoId),
-                                onClick = { onVideoClick(download.toVideoItem()) },
-                                onDeleteClick = { videoIdToDelete = download.videoId },
-                                onCancelClick = { viewModel.cancelDownload(download.videoId) },
-                                onPauseClick = { viewModel.pauseDownload(download.videoId) },
-                                onResumeClick = { viewModel.resumeDownload(download.videoId) },
-                                onSaveToDeviceClick = { viewModel.saveToPublicStorage(download.videoId) },
-                                onAddToPlaylistClick = { onAddToPlaylistClick(download.toVideoItem()) },
-                                modifier = Modifier.padding(start = 24.dp)
+
+                    val groupedVideos = videoDownloads.groupBy { it.playlistId }
+                    val singleVideos = groupedVideos[null] ?: emptyList()
+                    val playlistsGroup = groupedVideos.filterKeys { it != null }
+
+                    playlistsGroup.forEach { (playlistId, playlistVideos) ->
+                        item {
+                            val title = playlistVideos.firstOrNull()?.playlistTitle ?: "Playlist"
+                            val isExpanded = expandedPlaylistId == playlistId
+                            
+                            PlaylistDownloadRow(
+                                title = title,
+                                videoCount = playlistVideos.size,
+                                thumbnailUrl = playlistVideos.firstOrNull()?.thumbnailUrl ?: "",
+                                isExpanded = isExpanded,
+                                onClick = {
+                                    expandedPlaylistId = if (isExpanded) null else playlistId
+                                }
                             )
                         }
+                        
+                        if (expandedPlaylistId == playlistId) {
+                            items(playlistVideos) { download ->
+                                DownloadItemRow(
+                                    download = download,
+                                    isSaved = savedVideoIds.contains(download.videoId),
+                                    onClick = { onVideoClick(download.toVideoItem()) },
+                                    onDeleteClick = { videoIdToDelete = download.videoId },
+                                    onCancelClick = { viewModel.cancelDownload(download.videoId) },
+                                    onPauseClick = { viewModel.pauseDownload(download.videoId) },
+                                    onResumeClick = { viewModel.resumeDownload(download.videoId) },
+                                    onSaveToDeviceClick = { viewModel.saveToPublicStorage(download.videoId) },
+                                    onAddToPlaylistClick = { onAddToPlaylistClick(download.toVideoItem()) },
+                                    modifier = Modifier.padding(start = 24.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    items(singleVideos) { download ->
+                        DownloadItemRow(
+                            download = download,
+                            isSaved = savedVideoIds.contains(download.videoId),
+                            onClick = { onVideoClick(download.toVideoItem()) },
+                            onDeleteClick = { videoIdToDelete = download.videoId },
+                            onCancelClick = { viewModel.cancelDownload(download.videoId) },
+                            onPauseClick = { viewModel.pauseDownload(download.videoId) },
+                            onResumeClick = { viewModel.resumeDownload(download.videoId) },
+                            onSaveToDeviceClick = { viewModel.saveToPublicStorage(download.videoId) },
+                            onAddToPlaylistClick = { onAddToPlaylistClick(download.toVideoItem()) }
+                        )
                     }
                 }
 
-                items(singleVideos) { download ->
-                    DownloadItemRow(
-                        download = download,
-                        isSaved = savedVideoIds.contains(download.videoId),
-                        onClick = { onVideoClick(download.toVideoItem()) },
-                        onDeleteClick = { videoIdToDelete = download.videoId },
-                        onCancelClick = { viewModel.cancelDownload(download.videoId) },
-                        onPauseClick = { viewModel.pauseDownload(download.videoId) },
-                        onResumeClick = { viewModel.resumeDownload(download.videoId) },
-                        onSaveToDeviceClick = { viewModel.saveToPublicStorage(download.videoId) },
-                        onAddToPlaylistClick = { onAddToPlaylistClick(download.toVideoItem()) }
-                    )
+                // 2. Audio Section
+                if (audioDownloads.isNotEmpty()) {
+                    item {
+                        if (videoDownloads.isNotEmpty()) Spacer(modifier = Modifier.height(16.dp))
+                        DownloadSectionTitle(stringResource(R.string.audio))
+                    }
+
+                    items(audioDownloads) { download ->
+                        DownloadItemRow(
+                            download = download,
+                            isSaved = savedVideoIds.contains(download.videoId),
+                            onClick = { onVideoClick(download.toVideoItem()) },
+                            onDeleteClick = { videoIdToDelete = download.videoId },
+                            onCancelClick = { viewModel.cancelDownload(download.videoId) },
+                            onPauseClick = { viewModel.pauseDownload(download.videoId) },
+                            onResumeClick = { viewModel.resumeDownload(download.videoId) },
+                            onSaveToDeviceClick = { viewModel.saveToPublicStorage(download.videoId) },
+                            onAddToPlaylistClick = { onAddToPlaylistClick(download.toVideoItem()) }
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun DownloadSectionTitle(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Black,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+    )
 }

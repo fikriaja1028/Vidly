@@ -39,6 +39,7 @@ import com.fikriaja.vidly.ui.screens.settings.DataManagementViewModel
 import com.fikriaja.vidly.ui.screens.subscriptions.SubscriptionsScreen
 import com.fikriaja.vidly.ui.screens.subscriptions.SubscriptionFeedScreen
 import com.fikriaja.vidly.ui.screens.subscriptions.SubscriptionsFeedViewModel
+import com.fikriaja.vidly.ui.screens.shorts.ShortsScreen
 
 import androidx.navigation.toRoute
 
@@ -188,6 +189,12 @@ fun NavGraph(
                 onSeeAllHistory = { navController.navigate(Destination.History) { launchSingleTop = true } },
                 onSeeAllSubscriptions = { navController.navigate(Destination.SubscriptionsList) { launchSingleTop = true } },
                 onSeeAllDownloads = { navController.navigate(Destination.Downloads) { launchSingleTop = true } }
+            )
+        }
+        composable<Destination.Shorts> {
+            ShortsScreen(
+                onVideoClick = { video -> playerViewModel.loadVideo(video) },
+                onChannelClick = { url -> navController.navigate(Destination.Channel(url)) }
             )
         }
         composable<Destination.Downloads> {

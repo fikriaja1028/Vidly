@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -175,6 +177,8 @@ fun PlayerScreen(
     val queueCurrentIndex by viewModel.currentQueueIndex.collectAsStateWithLifecycle()
     val isQueueShuffleEnabled by viewModel.isQueueShuffleEnabled.collectAsStateWithLifecycle()
     val queueRepeatMode by viewModel.queueRepeatMode.collectAsStateWithLifecycle()
+    val isLoopVideoEnabled by viewModel.isLoopVideoEnabled.collectAsStateWithLifecycle()
+    val isLoopPlaylistEnabled by viewModel.isLoopPlaylistEnabled.collectAsStateWithLifecycle()
     var showQueueSheet by remember { mutableStateOf(false) }
     val syncTransition = rememberSyncShimmerTransition()
 
@@ -307,6 +311,8 @@ fun PlayerScreen(
             queueCurrentIndex = queueCurrentIndex,
             isQueueShuffleEnabled = isQueueShuffleEnabled,
             queueRepeatMode = queueRepeatMode,
+            isLoopVideoEnabled = isLoopVideoEnabled,
+            isLoopPlaylistEnabled = isLoopPlaylistEnabled,
             onDownloadSubtitle = viewModel::downloadSubtitle,
             onDownloadAudio = viewModel::downloadAudioOnly,
             onPlayQueueItem = viewModel::playQueueItemAt,
@@ -315,6 +321,10 @@ fun PlayerScreen(
             onClearQueue = viewModel::clearQueue,
             onToggleQueueShuffle = viewModel::toggleQueueShuffle,
             onCycleQueueRepeatMode = viewModel::cycleQueueRepeatMode,
+            onToggleLoopVideo = viewModel::toggleLoopVideo,
+            onToggleLoopPlaylist = viewModel::toggleLoopPlaylist,
+            onSetLoopVideo = viewModel::setLoopVideo,
+            onSetLoopPlaylist = viewModel::setLoopPlaylist,
             onEnqueueNext = viewModel::enqueueNext,
             onEnqueueLast = viewModel::enqueueLast
         )
@@ -417,6 +427,12 @@ private fun PlayerContent(
     onClearQueue: () -> Unit,
     onToggleQueueShuffle: () -> Unit,
     onCycleQueueRepeatMode: () -> Unit,
+    isLoopVideoEnabled: Boolean,
+    isLoopPlaylistEnabled: Boolean,
+    onToggleLoopVideo: () -> Unit,
+    onToggleLoopPlaylist: () -> Unit,
+    onSetLoopVideo: (Boolean) -> Unit,
+    onSetLoopPlaylist: (Boolean) -> Unit,
     onEnqueueNext: (VideoItem) -> Unit,
     onEnqueueLast: (VideoItem) -> Unit
 ) {
@@ -642,7 +658,12 @@ private fun PlayerContent(
         ModalBottomSheet(
             onDismissRequest = { showSettingsSheet = false }
         ) {
-            Column(modifier = Modifier.padding(bottom = 32.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 32.dp)
+            ) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.quality)) },
                     supportingContent = { Text(displayQuality) },
@@ -710,6 +731,31 @@ private fun PlayerContent(
                     leadingContent = { Icon(Icons.Default.Info, null) },
                     modifier = Modifier.clickable { onToggleStats() }
                 )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                ListItem(
+                    headlineContent = { Text("Loop video") },
+                    supportingContent = { Text(if (isLoopVideoEnabled) "Repeating current video" else "Off") },
+                    leadingContent = { Icon(Icons.Default.RepeatOne, null) },
+                    trailingContent = {
+                        Switch(
+                            checked = isLoopVideoEnabled,
+                            onCheckedChange = { onSetLoopVideo(it) }
+                        )
+                    },
+                    modifier = Modifier.clickable { onToggleLoopVideo() }
+                )
+                ListItem(
+                    headlineContent = { Text("Loop playlist") },
+                    supportingContent = { Text(if (isLoopPlaylistEnabled) "Repeating playlist" else "Off") },
+                    leadingContent = { Icon(Icons.Default.Repeat, null) },
+                    trailingContent = {
+                        Switch(
+                            checked = isLoopPlaylistEnabled,
+                            onCheckedChange = { onSetLoopPlaylist(it) }
+                        )
+                    },
+                    modifier = Modifier.clickable { onToggleLoopPlaylist() }
+                )
             }
         }
     }
@@ -718,7 +764,12 @@ private fun PlayerContent(
         ModalBottomSheet(
             onDismissRequest = { showSleepTimerSheet = false }
         ) {
-            Column(modifier = Modifier.padding(bottom = 32.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 32.dp)
+            ) {
                 Text(
                     text = stringResource(R.string.sleep_timer),
                     style = MaterialTheme.typography.titleLarge,

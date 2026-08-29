@@ -82,8 +82,13 @@ class PlaybackManager @Inject constructor(
     private var currentExtractedAt = 0L
     private var currentBundle: StreamBundle? = null
     private var currentStream: StreamItem? = null
+    // FIX(quality berubah-ubah): was always true – even when user locked to 720p
+    // the SABR loop would still auto-downgrade. Now toggled by ViewModel.
     private var isAutoQualityEnabled = true
     private var sponsorSegments: List<com.fikriaja.vidly.domain.model.SponsorSegment> = emptyList()
+    // Debounce downgrade to avoid flapping when bandwidth/buffer oscillates around threshold
+    private var lastDowngradeMs = 0L
+    private val DOWNGRADE_DEBOUNCE_MS = 15_000L
 
     private var managerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var progressJob: Job? = null
@@ -183,6 +188,15 @@ class PlaybackManager @Inject constructor(
         player.addListener(playerListener)
     }
 
+    fun isCurrentMediaLocal(): Boolean {
+        return player.currentMediaItem?.localConfiguration?.uri?.scheme == "file"
+    }
+
+
+    fun setAutoQualityEnabled(enabled: Boolean) {
+        isAutoQualityEnabled = enabled
+        VidlyLog.d("PlaybackManager", "Auto-quality ${if (enabled) "ENABLED" else "DISABLED"} (stream=${currentStream?.quality})")
+    }
 
     fun play(videoId: String, bundle: StreamBundle, stream: StreamItem, startPosition: Long = 0) {
         currentExtractedAt = bundle.extractedAt
@@ -259,6 +273,9 @@ class PlaybackManager @Inject constructor(
      */
     fun switchQualitySeamlessly(videoId: String, bundle: StreamBundle, stream: StreamItem) {
         currentStream = stream
+        // Any manual switch disables auto-downgrade; ViewModel will re-enable on "Auto"
+        // but we keep it disabled here to avoid immediate re-downgrade flip-flop
+        // The ViewModel's setQuality() will explicitly setAutoQualityEnabled() accordingly.
         val currentPosition = player.currentPosition
         val metadata = MediaMetadata.Builder()
             .setTitle(bundle.title)
@@ -431,9 +448,11 @@ class PlaybackManager @Inject constructor(
     @OptIn(UnstableApi::class)
     fun prepareNextSource(video: com.fikriaja.vidly.domain.model.VideoItem, bundle: StreamBundle) {
         if (player.mediaItemCount > 1) return
-        
-        val stream = bundle.videoStreams.find { it.quality.contains("360") }
-            ?: bundle.videoStreams.find { it.quality.contains("480") }
+
+        // FIX: use numeric resolution instead of string contains (360 could match 360p60 etc)
+        // Prefer lowest muxed for preloading to save bandwidth
+        val stream = bundle.videoStreams.filter { !it.isAdaptive }.minByOrNull { parseQualityInt(it.quality) }
+            ?: bundle.videoStreams.minByOrNull { parseQualityInt(it.quality) }
             ?: bundle.videoStreams.firstOrNull() ?: return
             
         val metadata = MediaMetadata.Builder()
@@ -489,21 +508,38 @@ class PlaybackManager @Inject constructor(
         player.addMediaItem(1, mediaItem)
     }
 
+    private fun parseQualityInt(q: String): Int {
+        // Consistent with VideoRepositoryImpl.parseQualityToInt – extracts leading number before 'p'
+        val m = Regex("""(\d+)\s*p""", RegexOption.IGNORE_CASE).find(q)
+        if (m != null) return m.groupValues[1].toIntOrNull() ?: 0
+        return Regex("""\d+""").find(q)?.value?.toIntOrNull() ?: 0
+    }
+
     private fun dropQuality() {
         val bundle = currentBundle ?: return
         val currentVideoId = player.currentMediaItem?.mediaId ?: return
-        
-        // Find next lower quality
-        val qualities = listOf("1080", "720", "480", "360")
-        val currentQual = currentStream?.quality ?: ""
-        val currentIndex = qualities.indexOfFirst { currentQual.contains(it) }
-        
-        if (currentIndex != -1 && currentIndex < qualities.size - 1) {
-            val nextQual = qualities[currentIndex + 1]
-            val nextStream = bundle.videoStreams.find { it.quality.contains(nextQual) }
-            if (nextStream != null) {
-                switchQualitySeamlessly(currentVideoId, bundle, nextStream)
-            }
+        // Debounce: don't flap every 500ms when bandwidth hovers around threshold
+        val now = System.currentTimeMillis()
+        if (now - lastDowngradeMs < DOWNGRADE_DEBOUNCE_MS) return
+
+        // Find next lower quality by numeric resolution, not string contains
+        val currentRes = parseQualityInt(currentStream?.quality ?: "")
+        if (currentRes == 0) return
+
+        // Candidates: strictly lower resolution, highest among lower
+        val candidates = bundle.videoStreams
+            .filter { parseQualityInt(it.quality) in 1 until currentRes }
+            .sortedByDescending { parseQualityInt(it.quality) }
+
+        // Prefer same family (adaptive vs progressive) to keep muxing stable;
+        // otherwise take highest lower
+        val currentIsAdaptive = currentStream?.isAdaptive ?: false
+        val nextStream = candidates.find { it.isAdaptive == currentIsAdaptive } ?: candidates.firstOrNull()
+
+        if (nextStream != null) {
+            lastDowngradeMs = now
+            VidlyLog.w("PlaybackManager", "Dropping quality ${currentStream?.quality} -> ${nextStream.quality}")
+            switchQualitySeamlessly(currentVideoId, bundle, nextStream)
         }
     }
 
@@ -530,16 +566,18 @@ class PlaybackManager @Inject constructor(
                     lastSaveTime = now
                 }
 
-                // Phase 2: Dynamic Bitrate Dropping (SABR Strategy)
+                // Phase 2: Dynamic Bitrate Dropping (SABR) – only when Auto is active
+                // Also checks buffered duration to avoid flapping (buffer 5s gate was too tight)
                 if (isAutoQualityEnabled && !player.isCurrentMediaItemLive) {
                     val estimate = bandwidthMeter.bitrateEstimate
-                    val currentQual = currentStream?.quality ?: ""
-
-                    if (currentQual.contains("1080") && estimate < BITRATE_1080P_THRESHOLD) {
-                        VidlyLog.w("PlaybackManager", "Bandwidth $estimate dropped below 1080p threshold. Downgrading.")
-                        dropQuality()
-                    } else if (currentQual.contains("720") && estimate < BITRATE_720P_THRESHOLD) {
-                        VidlyLog.w("PlaybackManager", "Bandwidth $estimate dropped below 720p threshold. Downgrading.")
+                    val currentRes = parseQualityInt(currentStream?.quality ?: "")
+                    val bufferedMs = player.bufferedPosition - currentPos
+                    // Require both low bandwidth AND low buffer to downgrade; prevents
+                    // single low estimate spike from dropping 1080p->480p and then bouncing.
+                    val shouldDrop1080 = currentRes >= 1080 && estimate in 1 until BITRATE_1080P_THRESHOLD && bufferedMs < 8000
+                    val shouldDrop720 = currentRes in 720..1079 && estimate in 1 until BITRATE_720P_THRESHOLD && bufferedMs < 6000
+                    if (shouldDrop1080 || shouldDrop720) {
+                        VidlyLog.w("PlaybackManager", "Bandwidth $estimate buffered $bufferedMs low -> downgrade from $currentRes p")
                         dropQuality()
                     }
                 }

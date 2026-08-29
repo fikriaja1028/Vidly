@@ -9,3 +9,4 @@
 
 # Android Studio / IntelliJ IDEA
 /.idea/
+.artifacts/

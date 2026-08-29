@@ -401,28 +401,42 @@ class SubscriptionsFeedViewModel @Inject constructor(
         }
     }
 
+    private fun parseQualityInt(q: String): Int {
+        val m = Regex("""(\d+)\s*p""", RegexOption.IGNORE_CASE).find(q)
+        if (m != null) return m.groupValues[1].toIntOrNull() ?: 0
+        return Regex("""\d+""").find(q)?.value?.toIntOrNull() ?: 0
+    }
+
     fun download(video: VideoItem, bundle: StreamBundle, url: String?, quality: String?, format: String?, isAdaptive: Boolean) {
         viewModelScope.launch {
             val audioUrl = if (isAdaptive) {
                 val isWebm = format?.contains("webm", ignoreCase = true) == true
                 val compatibleStreams = bundle.audioStreams.filter { audio ->
                     if (isWebm) {
-                        audio.format.contains("webm", ignoreCase = true) || 
+                        audio.format.contains("webm", ignoreCase = true) ||
                         audio.format.contains("opus", ignoreCase = true)
                     } else {
-                        audio.format.contains("m4a", ignoreCase = true) || 
+                        audio.format.contains("m4a", ignoreCase = true) ||
                         audio.format.contains("aac", ignoreCase = true)
                     }
                 }
 
                 compatibleStreams.filter { it.trackType == "ORIGINAL" }
-                    .maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
-                    ?.url ?: compatibleStreams.maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }?.url
+                    .maxByOrNull { parseQualityInt(it.quality) }
+                    ?.url ?: compatibleStreams.maxByOrNull { parseQualityInt(it.quality) }?.url
             } else null
 
-            // Fallback to standalone progressive stream if adaptive audio pairing fails
+            // FIX(fallback): was `find{!isAdaptive}` → first progressive arbitrarily (often 360p)
+            // Now pick best progressive <= requested quality to keep 720p request as 720p.
             val finalUrl = if (isAdaptive && audioUrl == null) {
-                bundle.videoStreams.find { !it.isAdaptive }?.url ?: url
+                val prefRes = quality?.let { parseQualityInt(it) } ?: 0
+                val progressiveCandidates = bundle.videoStreams.filter { !it.isAdaptive }
+                val fallback = if (prefRes > 0) {
+                    progressiveCandidates.filter { parseQualityInt(it.quality) in 1..prefRes }
+                        .maxByOrNull { parseQualityInt(it.quality) }
+                        ?: progressiveCandidates.maxByOrNull { parseQualityInt(it.quality) }
+                } else progressiveCandidates.maxByOrNull { parseQualityInt(it.quality) }
+                fallback?.url ?: url
             } else url
 
             val finalIsAdaptive = isAdaptive && audioUrl != null

@@ -242,6 +242,10 @@ open class PreferencesManager @Inject constructor(@ApplicationContext context: C
     open val proxyHost: Flow<String> = dataStore.data.map { it[PROXY_HOST] ?: "" }
     open val proxyPort: Flow<Int> = dataStore.data.map { it[PROXY_PORT] ?: 8080 }
 
+    // FEATURE (Loop): single video loop & playlist loop – persisted for Settings & Player
+    open val isLoopVideoEnabled: Flow<Boolean> = dataStore.data.map { it[LOOP_VIDEO_ENABLED] ?: false }
+    open val isLoopPlaylistEnabled: Flow<Boolean> = dataStore.data.map { it[LOOP_PLAYLIST_ENABLED] ?: false }
+
     suspend fun setHistoryEnabled(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[HISTORY_ENABLED] = enabled
@@ -408,6 +412,18 @@ open class PreferencesManager @Inject constructor(@ApplicationContext context: C
         }
     }
 
+    suspend fun setLoopVideoEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[LOOP_VIDEO_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setLoopPlaylistEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[LOOP_PLAYLIST_ENABLED] = enabled
+        }
+    }
+
     companion object {
         val HISTORY_ENABLED = booleanPreferencesKey("history_enabled")
         val SEARCH_HISTORY_PAUSED = booleanPreferencesKey("search_history_paused")
@@ -440,5 +456,8 @@ open class PreferencesManager @Inject constructor(@ApplicationContext context: C
         val PROXY_ENABLED = booleanPreferencesKey("proxy_enabled")
         val PROXY_HOST = stringPreferencesKey("proxy_host")
         val PROXY_PORT = intPreferencesKey("proxy_port")
+
+        val LOOP_VIDEO_ENABLED = booleanPreferencesKey("loop_video_enabled")
+        val LOOP_PLAYLIST_ENABLED = booleanPreferencesKey("loop_playlist_enabled")
     }
 }

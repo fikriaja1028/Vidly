@@ -1,95 +1,114 @@
-# Changelog — PlayTube (Modified Version)
+# Changelog — Vidly (PlayTube Modified Version)
 
-This document summarizes two rounds of updates applied on top of the original `PlayTube-main` source code:
-
-- **Update 1** — Fixes for all identified bugs/audit findings (security, privacy, data integrity, stability) + a **YouTube-style fullscreen button**.
-- **Update 2** — Additional features: **playback queue management**, **audio & subtitle downloads**, and **private mode + biometric app lock**.
-
-Document map:
-
-| Document | Content |
-|---|---|
-| `Changelog.md` (this file) | Summary of changes per update, for quick reading |
-| `Details.md` | Complete list of modified / deleted / added files per update |
-| `FIXES.md` | In-depth technical details for each fix (markers like `FIX(BUG #N)` / `FEATURE` are also present in the code) |
+This document summarizes all updates applied on top of the original `PlayTube-main` source code.
 
 ---
 
-## UPDATE 1 — Bug Fixes + Fullscreen Button
+## [1.0.0] — Update 1: Initial Bug Fixes + Fullscreen Button
 
 ### Security & Privacy
 
-1. **Fake PoToken system removed entirely.** Previously, every `googlevideo.com` stream request included the `X-Goog-Po-Token` header containing a fake timestamp string (`"po_token_<timestamp>"`). These invalid tokens were the root cause of recurring **403 errors** during playback. The interceptor in `NetworkModule.kt` has been cleaned up; `PoTokenProvider.kt` and `potoken/PoTokenGenerator.kt` have been **deleted**; and the fake `X-Goog-Visitor-Id` header has also been removed from `YouTubeHttpDataSource.kt`. Requests are now sent without a token — which is the correct behavior without a genuine BotGuard implementation.
+1. **Fake PoToken system removed entirely.**  
+   Previously, every stream request included a fake token that caused recurring `403` playback errors. Requests are now sent without a token, which is the correct behavior without a genuine BotGuard implementation.
 
-2. **Database upgrades no longer wipe user data.** The blanket `fallbackToDestructiveMigration()` in `DatabaseModule.kt` has been replaced with `fallbackToDestructiveMigrationOnDowngrade()` — version upgrades (e.g., from v9 to v10) will no longer completely clear the entire watch history.
+2. **Database updates no longer wipe user data.**  
+   When the app updates to a newer version, your watch history and other data stay safe—they are no longer automatically erased.
 
-3. **Cloud backup is locked down.** `AndroidManifest.xml` now uses `allowBackup="false"`, and the previously empty TODO `backup_rules.xml` / `data_extraction_rules.xml` have been rewritten with actual rules: the Room database and DataStore are **excluded** from Google backups and device transfers. Watch history and interest profiles remain on the device.
+3. **Cloud backup is locked down.**  
+   The database and app preferences are now **excluded** from Google Drive backups and device transfers. Watch history and interest profiles remain on your device only.
 
-4. **MediaSession is locked to the app.** `PlaybackService.kt` now verifies `onConnect`: only the PlayTube package itself is allowed to control the player. Previously, **any arbitrary app** could bind to the MediaController and control/inject media items.
+4. **MediaSession is locked to this app.**  
+   Other apps can no longer connect and take control of the video player from the outside.
 
-### Critical Bug Fixes (P0)
+### Critical Fixes (P0)
 
-5. **Endless recovery loop halted.** In `PlaybackManager.kt`, only HTTP 403 triggers recovery re-extraction; other network errors are routed to a backoff retry path in the ViewModel. `PlayerViewModel.kt` limits `recoverExpiredUrl()` to a maximum of **3 attempts** with backoff; the counter resets on successful playback / new video. The mechanical retry (`scheduleRetry`), which was previously dead code, is now properly connected.
+5. **Endless recovery loop halted.**  
+   If a network error occurs (other than 403), the app will now retry with a delay and a maximum of 3 attempts—no more infinite looping.
 
-6. **Chunked downloads now require HTTP 206.** `ParallelDownloader.kt` rejects `200 OK` responses (proxies that ignore `Range`) — previously, the full body was written into a 4 MB chunk slot, **corrupting the final downloaded file**.
+6. **Chunked downloads now require HTTP 206.**  
+   If a server ignores the `Range` request and sends a `200 OK` (full file), the app rejects it. This prevents downloaded files from becoming corrupted.
 
-7. **Resume download accuracy.** Retries now re-read chunk checkpoints from the database (instead of using stale in-memory progress), checkpoints are triggered every 512 KB interval (the old condition `% 512KB == 0` was almost never met), progress no longer exceeds 100%, and stale chunk maps (new URL with different sizes) are detected and rebuilt. Added `MissionDao.getChunkById()` / `deleteChunksForMission()`.
+7. **Resume download accuracy improved.**  
+   Resuming interrupted downloads is now much more accurate: the last position is re-read from the database, checkpoints are saved every 512 KB, and progress never exceeds 100%.
 
-8. **Backup restore no longer "falsely succeeds".** `DataManagerRepositoryImpl.kt` now scans **all** zip entries for `backup.json` (previously only checked the first entry), fails with a clear message if absent, and imposes a **256 MB** decompression limit (zip-bomb/OOM protection). The `CANCELLED` worker status is now handled, so the import UI never gets stuck forever.
+8. **Backup restore no longer "falsely succeeds".**  
+   The app now scans the entire backup zip file, ensures `backup.json` actually exists, and limits decompression to a maximum of 256 MB to protect against zip-bomb attacks.
 
-9. **Stale state is cleaned up during auto-advance.** Switching videos via autoplay now: disposes of the previous video's SponsorBlock segments, fetches segments for the new video, and resets quality state — previously, the next video would incorrectly use the previous video's SponsorBlock segments.
+9. **Stale state is cleaned up during auto-advance.**  
+   When autoplay moves to the next video, SponsorBlock data from the previous video is properly discarded so it doesn't mix with the new one.
 
-### Stability & Quality Fixes
+### Stability & Other Quality Fixes
 
-10. **Thread-safety** — `activeMissions` / `lastUpdateMap` in `VideoDownloadService.kt` are now `ConcurrentHashMap` with a `@Volatile` foreground flag (previously mutated from both the main thread AND IO coroutines simultaneously); the cookie jar in `NetworkModule.kt` is now thread-safe as well.
-11. **Takeout import fixed** — `ImportWorker.kt`: the CSV parser now respects quoted fields (commas inside quotes no longer shift columns), and timestamps with API < 26 are parsed correctly (previously all fell to "now", breaking chronological order on Android 7/7.1).
-12. **Smart proxy** — `DynamicProxySelector.kt` bypasses the proxy for loopback, private RFC1918 IPs, link-local, and `.local` hosts (previously, LAN hosts were forcibly routed through the proxy); `connectFailed()` is now logged.
-13. **Low-level fixes** — `Converters.kt` (unknown enums no longer crash on DB read), `VideoUtils.kt` (`extractVideoId` now matches `?v=`/`&v=` exactly, not arbitrary substrings), `UpdateResponse.kt` + `UpdateRepositoryImpl.kt` (null fields from GitHub Release no longer crash deserialization), `NewPipeInitializer.kt` (`@Volatile` flag), `UpdateUserInterestsUseCase.kt` (interest decay now runs every 24 hours — previously the `millis % 50 == 0` condition was almost never true), `DownloadRepositoryImpl.kt` (removed no-op `cancelUniqueWork` call, sanitized MediaStore filenames), `VideoPlayerGestureDetector.kt` (single-tap now only triggers after the finger is lifted without dragging — dragging for volume/brightness no longer opens/closes the control overlay).
+10. **Thread-safety for downloads.**  
+    Download data accessed from multiple places is now safe from concurrency crashes.
 
-### FEATURE: YouTube-Style Fullscreen Button
+11. **YouTube Takeout import fixed.**  
+    CSV files with quoted fields are now parsed correctly. Timestamps for older Android versions (below 8.0) are also parsed properly, so your history order isn't messed up.
 
-14. **Fullscreen button in the bottom-right corner of the player control overlay** (`PlayerScreen.kt`) — placed exactly like the YouTube app, with `Fullscreen` / `FullscreenExit` icons based on orientation.
-    - Entering fullscreen: rotates to `SENSOR_LANDSCAPE` (allows tilting left/right like YouTube); status bar & navigation bar automatically hide (immersive 16:9 mode).
-    - Exiting fullscreen: returns to portrait, system bars automatically restore.
-    - The swipe-up gesture on the player area now toggles the same behavior (previously it forced a fixed orientation and couldn't be undone with the same gesture).
+12. **Smart proxy handling.**  
+    The app no longer forces a proxy for local addresses (like home IPs or `localhost`), so accessing devices on your LAN isn't blocked.
+
+13. **Various minor fixes.**  
+    - Unknown enums in the database no longer crash the app.  
+    - Video ID extraction from URLs is now more precise.  
+    - Version update checks from GitHub don't crash if fields are empty.  
+    - User interest calculation now runs every 24 hours (previously it almost never ran).  
+    - Download filenames are sanitized before saving to MediaStore.  
+    - A single tap on the player now only triggers if you lift your finger without dragging (dragging for volume/brightness no longer opens/closes the control overlay).
+
+### New Features:
+    - YouTube‑style fullscreen button – bottom‑right corner, immersive landscape mode.
+    - Playback Queue Management – explicit queue, drag‑to‑reorder, shuffle, repeat modes.
+    - Audio‑only downloads – best available audio track saved as .m4a/.opus in the Music folder.
+    - Subtitle downloads – download WebVTT subtitles per language.
+    - Private (Incognito) mode – browse without leaving any trace; all history from the session is purged on exit.
+    - Biometric app lock – full‑screen lock with fingerprint/face unlock (falls back gracefully if no authenticator is registered).
 
 ---
 
-## UPDATE 2 — Additional Features
+## [1.0.1] — Update 2: New Features, Loops, Shorts & Quality Fixes
 
-### Feature 1: Playback Queue Management
-
-- **`QueueManager.kt` has been rewritten** into a true queue engine: a user-owned explicit queue, reactive StateFlow, *play next* (insert at front), *add to queue* (append at back), remove items, **drag-to-reorder**, shuffle, and repeat (OFF / ALL / ONE with wrap-around; repeat ONE is natively applied in ExoPlayer).
-- **`QueueSheet.kt` (new file)** — YouTube-style queue screen: long-press and drag to reorder (live swapping with haptic feedback), clear/delete buttons per item, header containing shuffle + repeat + clear queue.
-- **`PlayerViewModel.kt`** — `playNext()`/`playPrevious()` now prioritize: 1) explicit queue → 2) playlist order (shuffle-aware, repeat-all wrap) → 3) related autoplay. Playlist indices are recalculated synchronously to ensure fast skips don't miss the mark, and autoplay never repeats the same video.
-- **`PlayerScreen.kt`** — a `QueueMusic` button in the top control pill opens the queue sheet.
-- **`PlayerComponents.kt` + `VideoItemComponents.kt`** — related videos and any video row now have "Play next" and "Add to queue" actions in their menu (optional; other screens remain unaffected).
-
-### Feature 2: Audio & Subtitle Downloads
-
-- **Audio-only** — `VideoDownloadService.kt` now supports audio missions (`videoUrl=null`, `quality="Audio"`): selects the best audio track, downloads without muxing, and renames to `.m4a`/`.opus`. `DownloadRepositoryImpl.kt` exports audio to the MediaStore **Audio** collection in `Music/PlayTube` (video remains in `Movies/PlayTube`). The quality selection sheet (`SelectionSheets.kt`) now includes an **"Audio only (best available)"** section.
-- **Subtitle** — **`DownloadSubtitleUseCase.kt` (new file)**: fetches subtitle tracks (rewrites YouTube URLs from `fmt=json3/srv3/ttml` to `fmt=vtt`), validates the WebVTT payload, and saves to `Downloads/PlayTube` via MediaStore on Android 10+, or the app's external directory below that (without storage permission). `SubtitleSelectionSheet` now has a download button per language, with Snackbar feedback.
-
-### Feature 3: Private Mode + Biometric App Lock
-
-- **Private mode (incognito)** — `PreferencesManager.kt` stores the session start timestamp; while the session is active, browsing leaves no trace; when the session is **turned off**, `LibraryRepository.purgeDataSince()` (interface + implementation) deletes **all** watch history and search history recorded since the session started (`HistoryDao.deleteHistorySince` / `SearchHistoryDao.deleteSearchHistorySince`). A "Private session" toggle is available in `SettingsScreen.kt` (History & Privacy group).
-- **Biometric app lock** — `MainActivity.kt` displays a full-screen lock gate via `BiometricPrompt` (`BIOMETRIC_WEAK` + device credentials on Android 11+), automatically prompts when locked, re-locks every time the app leaves the foreground (`ON_PAUSE`), and **gracefully auto-unlocks** if the device has no registered authenticator so users aren't locked out. An "App lock (biometric)" toggle is available in `SettingsScreen.kt`; dependency `androidx.biometric:biometric:1.1.0` has been added to `libs.versions.toml` + `app/build.gradle.kts`, and the `USE_BIOMETRIC` permission has been added to the manifest.
+This single update bundles **2 major new features** along with comprehensive fixes for broken characters, UI scroll in fullscreen, download categorization, Shorts personalization, and the existing subtitle/720p/quality issues.
 
 ---
 
-## Summary Statistics
+### New Features
 
-| Metric | Count |
-|---|---|
-| Unique source files modified (both updates) | 38 |
-| Files deleted | 2 (fake PoToken system) |
-| New files added | 2 (`QueueSheet.kt`, `DownloadSubtitleUseCase.kt`) |
-| Bugs/security fixes (Update 1) | 13 groups + 1 fullscreen feature |
-| New features (Update 2) | 3 |
+#### A. Loop Controls (Video & Playlist)
+- **Loop Video** — You can now loop the current video. When the video ends, it restarts automatically from the beginning without reloading. Turn it on in **Settings → Playback Loops → Loop video**, or quickly from the **player Settings sheet** (gear icon → Loop video). It uses the player's native repeat mode, so it's smooth and doesn't cause extra buffering. A small Snackbar gives feedback when you toggle it.
+- **Loop Playlist** — When playing a playlist, you can now loop the whole playlist. After the last video finishes, it automatically goes back to the first video. Works together with shuffle — if shuffle is on, the next video is picked randomly from the unplayed ones. For single-video playlists, the same video simply replays. Even if autoplay is off, a looping playlist will still continue — perfect for keeping a music or study playlist running. Toggle in **Settings → Playback Loops → Loop playlist** or in the **player Settings sheet**.
 
-## Remaining Notes (suggestions for future work)
+#### B. YouTube Shorts
+- **New Shorts tab** in the bottom navigation bar (between Home and Subscriptions). Tap it to open the Shorts feed.
+- **Vertical swipe feed** — swipe up or down to go to the next Short, just like on YouTube/TikTok. Videos auto-play when they become visible and pause when you swipe away.
+- **Full-screen vertical player** — videos are displayed full-screen in portrait, cropped to fill (zoom) so they look native to Shorts. A subtle gradient makes the text readable.
+- **Tap to play/pause** — tap the video to pause, tap again to resume. A quick play/pause icon flashes in the center.
+- **Info overlay** — at the bottom left you see the channel avatar, channel name, video title, and upload date. At the bottom right you have action buttons.
+- **Actions** — Like (with liked state), Share (opens the full player), and More (opens the full player for comments/quality etc.). Liking is saved to your favorites and shows a Snackbar.
+- **Personalized feed** — the Shorts feed now uses **user interests** and **search-based fallbacks** to deliver more relevant and reliable content.
+- **Looping** — each Short loops automatically (like real Shorts), so you can watch it again without swiping.
+- **Deep links** for `youtube.com/shorts/...` now open correctly in the Shorts player. From a Short you can tap the channel name/avatar to go to the channel page, or tap Share/More to open the regular player for that video.
 
-- Genuine PoToken BotGuard integration (bgutil-style) is not yet implemented — requests are currently sent **without** a token, which is the safest/correct behavior at this time.
-- `workers/DownloadWorker.kt` (774 lines) is dead code retained for reference; it is safe to delete in a future cleanup.
-- `SimpleCache` is still lazily built on the playback looper (`di/PlayerModule.kt`) — minor jank on the first playback on some devices.
-- The ExoPlayer instance is intentionally a process-lifetime singleton; `release()` is never called.
+#### C. Categorized Downloads
+- The Downloads page is now neatly organized into **separate "Video" and "Audio" sections**, making it easier to browse and manage your downloaded files.
+---
+
+### Fixes (Quality, Subtitles, UI & Organization)
+
+#### 1. Garbled Characters Fixed Everywhere
+- All occurrences of garbled text (like `â€¢`, `Ã¢â‚¬Â¢`) are now replaced with proper characters (`•`, `…`, `—`) across **video metadata, library entries, player descriptions, and subtitles**.
+- Downloaded subtitles are saved in clean UTF-8 format (without BOM), so they can be opened in any text editor.
+
+#### 2. Downloading 720p Now Gives You True 720p
+- When you select `720p` for download, the app now actually fetches the video at 720p resolution.
+- Previously, on some videos, the app silently downloaded `360p` (or lower) without telling you, resulting in blurry files. This no longer happens.
+
+#### 3. Video Quality No Longer Fluctuates Randomly (Auto Quality Stable)
+- The Auto quality mode is now much more stable. Resolution will no longer jump up and down (e.g., 720p ↔ 480p) every few seconds.
+- Quality downgrades now only happen when **two conditions** are met simultaneously: the video buffer is almost empty **and** the internet speed is very low.
+- There is also a 15-second cooldown to prevent rapid back-and-forth switching (flapping).
+
+#### 4. Fullscreen UI Scroll Fix
+- Selection sheets (Quality, Subtitles, Settings, etc.) are now **fully scrollable in fullscreen/landscape mode**, ensuring all options are reachable even when the screen is rotated.
+
+---

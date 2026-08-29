@@ -697,7 +697,7 @@ fun ModernPlaylistRow(
                 letterSpacing = 0.1.sp
             )
             Text(
-                text = "${playlist.uploaderName} â€¢ ${playlist.streamCount} videos",
+                text = "${playlist.uploaderName} • ${playlist.streamCount} videos",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 fontWeight = FontWeight.Medium
@@ -891,12 +891,12 @@ fun VideoRow(
                 buildString {
                     append(uploader)
                     if (viewCount != null) {
-                        append(" â€¢ ")
+                        append(" • ")
                         append(VideoUtils.formatViewCount(viewCount))
                         append(" views")
                     }
                     if (!uploadDate.isNullOrBlank()) {
-                        append(" â€¢ ")
+                        append(" • ")
                         append(VideoUtils.formatUploadDate(uploadDate))
                     }
                 }
@@ -1352,7 +1352,7 @@ fun DownloadItemRow(
                     "${formatBytes(download.downloadedSize)} / ${formatBytes(download.totalSize)}"
                 }
 
-                val qualityText = download.quality?.let { " â€¢ $it" } ?: ""
+                val qualityText = download.quality?.let { " • $it" } ?: ""
 
                 // Status: Truncates if space is tight
                 Text(
@@ -1368,7 +1368,7 @@ fun DownloadItemRow(
                 
                 // Metrics: Always visible
                 Text(
-                    text = " â€¢ $sizeText$qualityText",
+                    text = " • $sizeText$qualityText",
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -28,6 +28,7 @@ class SABRDataSource(
     private var opened = false
     private var bytesRemaining = 0L
     private var currentPosition = 0L
+    private var useChunking = true
 
     // Optimized chunk size for 1080p streaming (512KB to 1MB)
     private val CHUNK_SIZE = 768 * 1024L 
@@ -42,6 +43,19 @@ class SABRDataSource(
         bytesRemaining = if (dataSpec.length != C.LENGTH_UNSET.toLong()) dataSpec.length else C.LENGTH_UNSET.toLong()
         
         opened = true
+
+        // FIX(subtitle mojibake & small files): Don't chunk very small requests
+        // (subtitles, manifests ~ <300KB). Chunking splits UTF-8 multi-byte sequences
+        // across Range requests and some servers return different Content-Encoding per
+        // chunk causing garbled • → •. Let upstream handle small files directly.
+        val uri = dataSpec.uri.toString()
+        val isSmallTextRequest = uri.contains("timedtext") || uri.contains("caption") || uri.contains(".vtt") || uri.contains(".ttml")
+        useChunking = !(isSmallTextRequest || (bytesRemaining != C.LENGTH_UNSET.toLong() && bytesRemaining < 512 * 1024))
+        if (!useChunking) {
+            VidlyLog.d("SABRDataSource", "Bypassing chunking for small/text request: $uri length=$bytesRemaining")
+            upstream.open(dataSpec)
+            return bytesRemaining
+        }
         
         // Initial chunk open
         openNextChunk()
@@ -83,11 +97,22 @@ class SABRDataSource(
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (!opened) return C.RESULT_END_OF_INPUT
 
+        // If we bypassed chunking (small/text request), delegate directly to upstream
+        if (!useChunking) {
+            return upstream.read(buffer, offset, length)
+        }
+
         var bytesRead = upstream.read(buffer, offset, length)
         
         if (bytesRead == C.RESULT_END_OF_INPUT) {
             // Chunk finished, check if we need to open next one
             if (bytesRemaining != C.LENGTH_UNSET.toLong() && bytesRemaining <= 0) {
+                return C.RESULT_END_OF_INPUT
+            }
+            // LENGTH_UNSET with chunking is only for media streams where we know
+            // there is more data – open next chunk. For safety, if we are at position 0
+            // and got EOF immediately, treat as real EOF (empty response).
+            if (bytesRemaining == C.LENGTH_UNSET.toLong() && currentPosition == 0L) {
                 return C.RESULT_END_OF_INPUT
             }
             

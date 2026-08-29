@@ -73,6 +73,12 @@ class SettingsViewModel @Inject constructor(
     val isAppLockEnabled: StateFlow<Boolean> = preferencesManager.isAppLockEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val isLoopVideoEnabled: StateFlow<Boolean> = preferencesManager.isLoopVideoEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val isLoopPlaylistEnabled: StateFlow<Boolean> = preferencesManager.isLoopPlaylistEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val availableLocales = LocaleUtils.getAvailableLocales(context)
 
     fun setHistoryEnabled(enabled: Boolean) {
@@ -138,6 +144,18 @@ class SettingsViewModel @Inject constructor(
     fun setAppLockEnabled(enabled: Boolean) {
         viewModelScope.launch {
             preferencesManager.setAppLockEnabled(enabled)
+        }
+    }
+
+    fun setLoopVideoEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesManager.setLoopVideoEnabled(enabled)
+        }
+    }
+
+    fun setLoopPlaylistEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesManager.setLoopPlaylistEnabled(enabled)
         }
     }
 

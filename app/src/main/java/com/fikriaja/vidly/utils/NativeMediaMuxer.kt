@@ -75,6 +75,13 @@ class NativeMediaMuxer {
             
             val videoStartOffset = videoExtractor.sampleTime
             val audioStartOffset = audioExtractor.sampleTime
+            
+            // FIX: Use a common offset to preserve relative timing between A/V
+            val commonOffset = if (videoStartOffset >= 0 && audioStartOffset >= 0) {
+                minOf(videoStartOffset, audioStartOffset)
+            } else {
+                maxOf(0L, videoStartOffset, audioStartOffset)
+            }
 
             val videoBuffer = ByteBuffer.allocateDirect(4 * 1024 * 1024)
             val audioBuffer = ByteBuffer.allocateDirect(1 * 1024 * 1024)
@@ -95,7 +102,7 @@ class NativeMediaMuxer {
                     if (bufferInfo.size < 0) {
                         videoDone = true
                     } else {
-                        bufferInfo.presentationTimeUs = videoExtractor.sampleTime - videoStartOffset
+                        bufferInfo.presentationTimeUs = videoExtractor.sampleTime - commonOffset
                         bufferInfo.offset = 0
                         bufferInfo.flags = if ((videoExtractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
                             MediaCodec.BUFFER_FLAG_KEY_FRAME
@@ -109,7 +116,7 @@ class NativeMediaMuxer {
                     if (bufferInfo.size < 0) {
                         audioDone = true
                     } else {
-                        bufferInfo.presentationTimeUs = audioExtractor.sampleTime - audioStartOffset
+                        bufferInfo.presentationTimeUs = audioExtractor.sampleTime - commonOffset
                         bufferInfo.offset = 0
                         bufferInfo.flags = if ((audioExtractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
                             MediaCodec.BUFFER_FLAG_KEY_FRAME

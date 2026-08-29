@@ -691,6 +691,7 @@ private fun LockScreen(onUnlock: () -> Unit) {
 fun VidlyBottomBar(navController: androidx.navigation.NavHostController) {
     val items = listOf(
         Triple(Destination.Home, Icons.Default.Home, stringResource(R.string.tab_for_you)),
+        Triple(Destination.Shorts, Icons.Default.PlayArrow, "Shorts"),
         Triple(Destination.Subscriptions, Icons.Default.Subscriptions, stringResource(R.string.subscriptions)),
         Triple(Destination.Search(""), Icons.Default.Search, stringResource(R.string.search)),
         Triple(Destination.Library, Icons.Default.LibraryMusic, stringResource(R.string.library))

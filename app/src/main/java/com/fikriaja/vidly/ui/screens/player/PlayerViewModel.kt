@@ -94,6 +94,11 @@ class PlayerViewModel @Inject constructor(
     private val _isAutoplayEnabled = MutableStateFlow(true)
     val isAutoplayEnabled: StateFlow<Boolean> = _isAutoplayEnabled.asStateFlow()
 
+    val isLoopVideoEnabled: StateFlow<Boolean> = preferencesManager.isLoopVideoEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val isLoopPlaylistEnabled: StateFlow<Boolean> = preferencesManager.isLoopPlaylistEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val sleepTimerRemainingTime: StateFlow<Int?> = sleepTimerManager.remainingTime
     val shouldCloseAppOnTimerFinish: StateFlow<Boolean> = sleepTimerManager.shouldCloseApp
 
@@ -255,8 +260,16 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             playbackManager.playbackEnded.collect {
                 saveWatchProgress()
-                if (_isAutoplayEnabled.value && !sleepTimerManager.isTimerActive()) {
-                    playNext()
+                // Loop video is handled natively by ExoPlayer REPEAT_ONE – no need to playNext.
+                // If loop video is on, we stay on same video (player already loops).
+                if (isLoopVideoEnabled.value) return@collect
+                // Sleep timer blocks autoplay
+                if (!sleepTimerManager.isTimerActive()) {
+                    // If autoplay disabled but playlist loop enabled, we still want to loop playlist
+                    val shouldAdvance = _isAutoplayEnabled.value || isLoopPlaylistEnabled.value
+                    if (shouldAdvance) playNext() else {
+                        // For non-playlist single video with loop off & autoplay off → stop
+                    }
                 }
             }
         }
@@ -308,6 +321,28 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesManager.isAutoplayEnabled.collect { _isAutoplayEnabled.value = it }
         }
+        // Loop preferences – keep ExoPlayer repeatMode in sync
+        viewModelScope.launch {
+            preferencesManager.isLoopVideoEnabled.collect { enabled ->
+                // Loop video = REPEAT_ONE, otherwise OFF (queue repeat ONE handled separately)
+                // If playlist loop also enabled, video loop takes precedence for single video
+                if (enabled) {
+                    playbackManager.player.repeatMode = Player.REPEAT_MODE_ONE
+                } else {
+                    // Restore queue's repeat-one if active, else OFF
+                    val queueRepeatOne = queueManager.repeatMode.value == Player.REPEAT_MODE_ONE
+                    playbackManager.player.repeatMode = if (queueRepeatOne) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+                }
+            }
+        }
+        viewModelScope.launch {
+            queueManager.repeatMode.collect { mode ->
+                // Keep ExoPlayer in sync when queue repeat changes, but don't override video loop
+                if (!isLoopVideoEnabled.value) {
+                    playbackManager.player.repeatMode = if (mode == Player.REPEAT_MODE_ONE) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+                }
+            }
+        }
 
         // Network recovery
         viewModelScope.launch {
@@ -344,12 +379,8 @@ class PlayerViewModel @Inject constructor(
             if (download != null && download.status == DownloadStatus.COMPLETED) {
                 val localFile = File(download.filePath)
                 if (withContext(Dispatchers.IO) { localFile.exists() }) {
-                    val localBundle = StreamBundle(videoStreams = emptyList(), audioStreams = emptyList(), title = download.title, uploaderName = download.uploaderName, uploaderUrl = null, uploaderThumbnailUrl = null, description = "Playing from local storage", viewCount = 0, uploadDate = null, thumbnailUrl = download.thumbnailUrl)
-                    currentBundle = localBundle
-                    currentVideoItem = VideoItem(id = videoId, title = download.title, thumbnailUrl = download.thumbnailUrl, uploaderName = download.uploaderName, uploaderUrl = null, uploaderThumbnailUrl = null, viewCount = 0, uploadDate = null, rawUploadDate = null, duration = playbackManager.duration.value / 1000)
-                    _uiState.value = PlayerUiState.Success(download.title, download.uploaderName, localBundle)
-                    miniPlayerManager.updateMetadata(currentVideoItem)
-                    _currentQuality.value = "Local (${download.quality})"
+                    // FIX: Ensure player switches to local file even during auto-transition
+                    playLocal(videoId, download, localFile, force = true)
                     updatePlaylistIndex()
                     launch { isSavedUseCase(videoId).collectLatest { _isSaved.value = it } }
                     return@launch
@@ -467,10 +498,15 @@ class PlayerViewModel @Inject constructor(
                 syncSubtitles(bundle)
                 
                 val preferred = preferredQuality.value
+                // FIX(quality lock): inform PlaybackManager whether Auto is active so it won't
+                // auto-downgrade a manually locked 720p stream
+                playbackManager.setAutoQualityEnabled(preferred == "Auto")
                 val stream = if (preferred == "Auto") {
                     selectAutoQuality(bundle.videoStreams)
                 } else {
-                    bundle.videoStreams.find { it.quality == preferred } 
+                    // Exact match first, then numeric match (handles 720p vs 720p60)
+                    bundle.videoStreams.find { it.quality.equals(preferred, ignoreCase = true) }
+                        ?: bundle.videoStreams.find { parseQualityInt(it.quality) == parseQualityInt(preferred) }
                         ?: selectAutoQuality(bundle.videoStreams)
                 }
 
@@ -488,13 +524,20 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    private fun playLocal(videoId: String, downloadedVideo: DownloadEntity, localFile: File, isSameVideo: Boolean) {
+    private fun playLocal(videoId: String, downloadedVideo: DownloadEntity, localFile: File, isSameVideo: Boolean = false, force: Boolean = false) {
         val localBundle = StreamBundle(videoStreams = emptyList(), audioStreams = emptyList(), title = downloadedVideo.title, uploaderName = downloadedVideo.uploaderName, uploaderUrl = null, uploaderThumbnailUrl = null, description = "Playing from local storage", viewCount = 0, uploadDate = null, thumbnailUrl = downloadedVideo.thumbnailUrl)
         currentBundle = localBundle
         _uiState.value = PlayerUiState.Success(downloadedVideo.title, downloadedVideo.uploaderName, localBundle)
-        if (!isSameVideo) {
+        
+        // FIX: Also update currentVideoItem so miniplayer and other UI components have the right metadata
+        currentVideoItem = downloadedVideo.toVideoItem().copy(duration = playbackManager.duration.value / 1000)
+        miniPlayerManager.updateMetadata(currentVideoItem)
+
+        if (!isSameVideo || force || !playbackManager.isCurrentMediaLocal()) {
             playbackManager.playLocal(videoId, localFile, downloadedVideo.title, downloadedVideo.uploaderName, downloadedVideo.thumbnailUrl)
-            viewModelScope.launch { playbackManager.player.seekTo(getResumePosition(videoId)) }
+            if (!isSameVideo && !force) {
+                viewModelScope.launch { playbackManager.player.seekTo(getResumePosition(videoId)) }
+            }
         }
         _currentQuality.value = "Local (${downloadedVideo.quality})"
     }
@@ -652,7 +695,8 @@ class PlayerViewModel @Inject constructor(
             if (download != null && download.status == DownloadStatus.COMPLETED) {
                 val localFile = File(download.filePath)
                 if (withContext(Dispatchers.IO) { localFile.exists() }) {
-                    playLocal(videoId, download, localFile, true)
+                    // FIX: Force switch to local during recovery
+                    playLocal(videoId, download, localFile, isSameVideo = true, force = true)
                     _isRecovering.value = false
                     return@launch
                 }
@@ -662,12 +706,14 @@ class PlayerViewModel @Inject constructor(
                 currentBundle = bundle
                 _uiState.value = PlayerUiState.Success(bundle.title, bundle.uploaderName, bundle)
                 syncSubtitles(bundle)
-                
+
                 val preferred = preferredQuality.value
+                playbackManager.setAutoQualityEnabled(preferred == "Auto")
                 val stream = if (preferred == "Auto") {
                     selectAutoQuality(bundle.videoStreams)
                 } else {
-                    bundle.videoStreams.find { it.quality == preferred } 
+                    bundle.videoStreams.find { it.quality.equals(preferred, ignoreCase = true) }
+                        ?: bundle.videoStreams.find { parseQualityInt(it.quality) == parseQualityInt(preferred) }
                         ?: selectAutoQuality(bundle.videoStreams)
                 }
 
@@ -763,6 +809,12 @@ class PlayerViewModel @Inject constructor(
         playbackManager.setPitch(pitch)
         viewModelScope.launch { preferencesManager.setPlaybackPitch(pitch) }
     }
+    private fun parseQualityInt(q: String): Int {
+        val m = Regex("""(\d+)\s*p""", RegexOption.IGNORE_CASE).find(q)
+        if (m != null) return m.groupValues[1].toIntOrNull() ?: 0
+        return Regex("""\d+""").find(q)?.value?.toIntOrNull() ?: 0
+    }
+
     fun setQuality(stream: StreamItem?) {
         val videoId = currentVideoId ?: return
         val bundle = currentBundle ?: return
@@ -771,13 +823,15 @@ class PlayerViewModel @Inject constructor(
             if (stream == null) {
                 // User selected "Auto"
                 preferencesManager.setPreferredQuality("Auto")
+                playbackManager.setAutoQualityEnabled(true)
                 val autoStream = selectAutoQuality(bundle.videoStreams)
-                autoStream?.let { 
+                autoStream?.let {
                     playbackManager.switchQualitySeamlessly(videoId, bundle, it)
                     _currentQuality.value = it.quality
                 }
             } else {
                 preferencesManager.setPreferredQuality(stream.quality)
+                playbackManager.setAutoQualityEnabled(false)
                 playbackManager.switchQualitySeamlessly(videoId, bundle, stream)
                 _currentQuality.value = stream.quality
             }
@@ -794,24 +848,31 @@ class PlayerViewModel @Inject constructor(
         val estimate = playbackManager.getBandwidthEstimate()
         val bufferedDuration = playbackManager.player.bufferedPosition - playbackManager.player.currentPosition
 
-        val sortedStreams = streams.sortedBy {
-            it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0
-        }
+        val sortedStreams = streams.sortedBy { parseQualityInt(it.quality) }
 
         val thresholds = Constants.QualityThresholds
 
-        // If buffer is very low (less than 5s), stick to a lower quality even if bandwidth is high
-        val maxAllowedQuality = if (bufferedDuration < 5000) thresholds.P480 else Long.MAX_VALUE
+        // FIX(buffer flapping): previous 5s gate forced 480p instantly when buffer dipped
+        // 4.9s vs 5.1s, causing 720p↔480p bouncing. Now: only cap when buffer very low (<3s)
+        // and bandwidth also low. This keeps 720p stable during normal buffering jitter.
+        val maxAllowedQuality = when {
+            bufferedDuration < 3000 && estimate < thresholds.P720 -> thresholds.P480
+            bufferedDuration < 2000 -> thresholds.P360
+            else -> Long.MAX_VALUE
+        }
 
+        // Use numeric resolution instead of string contains to avoid "720p" matching "720p60" incorrectly
+        fun findByRes(res: Int): StreamItem? = sortedStreams.findLast { parseQualityInt(it.quality) == res }
+        // For 4K/2K also match fps variants (2160p60 etc should still count as 2160p)
         return when {
-            estimate >= thresholds.P2160 && thresholds.P2160 <= maxAllowedQuality -> sortedStreams.findLast { it.quality.contains("2160") || it.quality.contains("4K") }
-            estimate >= thresholds.P1440 && thresholds.P1440 <= maxAllowedQuality -> sortedStreams.findLast { it.quality.contains("1440") || it.quality.contains("2K") }
-            estimate >= thresholds.P1080 && thresholds.P1080 <= maxAllowedQuality -> sortedStreams.findLast { it.quality.contains("1080") }
-            estimate >= thresholds.P720 && thresholds.P720 <= maxAllowedQuality -> sortedStreams.findLast { it.quality.contains("720") }
-            estimate >= thresholds.P480 && thresholds.P480 <= maxAllowedQuality -> sortedStreams.findLast { it.quality.contains("480") }
-            estimate >= thresholds.P360 && thresholds.P360 <= maxAllowedQuality -> sortedStreams.findLast { it.quality.contains("360") }
-            else -> sortedStreams.firstOrNull()
-        } ?: sortedStreams.findLast { it.quality.contains("480") } ?: sortedStreams.firstOrNull()
+            estimate >= thresholds.P2160 && thresholds.P2160 <= maxAllowedQuality -> findByRes(2160) ?: sortedStreams.findLast { parseQualityInt(it.quality) >= 2160 }
+            estimate >= thresholds.P1440 && thresholds.P1440 <= maxAllowedQuality -> findByRes(1440) ?: sortedStreams.findLast { parseQualityInt(it.quality) >= 1440 }
+            estimate >= thresholds.P1080 && thresholds.P1080 <= maxAllowedQuality -> findByRes(1080) ?: sortedStreams.findLast { parseQualityInt(it.quality) >= 1080 }
+            estimate >= thresholds.P720 && thresholds.P720 <= maxAllowedQuality -> findByRes(720) ?: sortedStreams.findLast { parseQualityInt(it.quality) in 720..1079 }
+            estimate >= thresholds.P480 && thresholds.P480 <= maxAllowedQuality -> findByRes(480)
+            estimate >= thresholds.P360 && thresholds.P360 <= maxAllowedQuality -> findByRes(360)
+            else -> sortedStreams.firstOrNull { parseQualityInt(it.quality) <= 360 } ?: sortedStreams.firstOrNull()
+        } ?: sortedStreams.findLast { parseQualityInt(it.quality) == 480 } ?: sortedStreams.firstOrNull()
     }
     fun setSubtitlesEnabled(enabled: Boolean) { _isCcEnabled.value = enabled; playbackManager.updateCcState(enabled, _selectedSubtitleLanguage.value); viewModelScope.launch { preferencesManager.setSubtitlesEnabled(enabled) } }
     fun setSubtitleLanguage(lang: String?) { viewModelScope.launch { if (lang == null) setSubtitlesEnabled(false) else { _isCcEnabled.value = true; _selectedSubtitleLanguage.value = lang; playbackManager.updateCcState(true, lang); preferencesManager.setSubtitlesEnabled(true); preferencesManager.setPreferredSubtitleLanguage(lang) } } }
@@ -928,16 +989,22 @@ class PlayerViewModel @Inject constructor(
         val index = _playlistIndex.value
         
         if (playlist != null && index != -1) {
+            // Loop playlist takes precedence over queue repeat for playlist navigation
+            val isLoopPlaylist = isLoopPlaylistEnabled.value || queueManager.repeatMode.value == Player.REPEAT_MODE_ALL
             val nextIndex = when {
-                // Repeat-all wraps around; shuffle picks a random unplayed video
+                // Shuffle overrides looping but still respects pool
                 queueManager.isShuffleEnabled.value && playlist.videos.size > 1 ->
                     pickShuffledPlaylistIndex(playlist, index)
                 index < playlist.videos.size - 1 -> index + 1
-                queueManager.repeatMode.value == Player.REPEAT_MODE_ALL -> 0
+                isLoopPlaylist -> 0
                 else -> -1
             }
             if (nextIndex != -1 && nextIndex != index) {
                 loadVideo(playlist.videos[nextIndex], playlist.id, playlist.title)
+                return
+            } else if (isLoopPlaylist && playlist.videos.size == 1) {
+                // Single-item playlist loop – replay same video
+                loadVideo(playlist.videos[0], playlist.id, playlist.title)
                 return
             }
         }
@@ -1033,10 +1100,13 @@ class PlayerViewModel @Inject constructor(
         queueManager.setRepeatMode(nextMode)
         // REPEAT_MODE_ONE is handled natively by the player (loops current item).
         // OFF and ALL are handled at the ViewModel level in playNext().
-        playbackManager.player.repeatMode = if (nextMode == Player.REPEAT_MODE_ONE) {
-            Player.REPEAT_MODE_ONE
-        } else {
-            Player.REPEAT_MODE_OFF
+        // Respect video loop setting – don't override REPEAT_ONE when loop video is on
+        if (!isLoopVideoEnabled.value) {
+            playbackManager.player.repeatMode = if (nextMode == Player.REPEAT_MODE_ONE) {
+                Player.REPEAT_MODE_ONE
+            } else {
+                Player.REPEAT_MODE_OFF
+            }
         }
         viewModelScope.launch {
             _snackbarMessage.emit(
@@ -1048,6 +1118,25 @@ class PlayerViewModel @Inject constructor(
             )
         }
     }
+
+    // FEATURE: Loop video & playlist – used by Settings and Player controls
+    fun setLoopVideo(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesManager.setLoopVideoEnabled(enabled)
+            _snackbarMessage.emit(if (enabled) "Loop video: ON" else "Loop video: OFF")
+        }
+    }
+
+    fun toggleLoopVideo() = setLoopVideo(!isLoopVideoEnabled.value)
+
+    fun setLoopPlaylist(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesManager.setLoopPlaylistEnabled(enabled)
+            _snackbarMessage.emit(if (enabled) "Loop playlist: ON" else "Loop playlist: OFF")
+        }
+    }
+
+    fun toggleLoopPlaylist() = setLoopPlaylist(!isLoopPlaylistEnabled.value)
 
     fun clearFinishedQueueIfIdle() {
         if (!playbackManager.isPlaying.value && playbackManager.player.mediaItemCount == 0) {
@@ -1202,9 +1291,30 @@ class PlayerViewModel @Inject constructor(
             val audioUrl = if (isAdaptive) {
                 val isWebm = format?.contains("webm", ignoreCase = true) == true
                 val compatible = bundle.audioStreams.filter { if (isWebm) it.format.contains("webm", ignoreCase = true) || it.format.contains("opus", ignoreCase = true) else it.format.contains("m4a", ignoreCase = true) || it.format.contains("aac", ignoreCase = true) }
-                (compatible.filter { it.trackType == "ORIGINAL" }.maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 } ?: compatible.maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 })?.url
+                (compatible.filter { it.trackType == "ORIGINAL" }.maxByOrNull { parseQualityInt(it.quality) } ?: compatible.maxByOrNull { parseQualityInt(it.quality) })?.url
             } else null
-            downloadVideoUseCase(videoId = video.id, url = url, title = video.title, thumbnailUrl = video.thumbnailUrl, uploaderName = video.uploaderName, quality = quality, format = format, audioUrl = audioUrl)
+            // FIX(720p jadi 360p): if adaptive but no compatible audio, fallback to best progressive <= quality
+            var finalUrl = url
+            var finalIsAdaptive = isAdaptive
+            var finalFormat = format
+            var finalQuality = quality
+            if (isAdaptive && audioUrl == null) {
+                val prefRes = quality?.let { parseQualityInt(it) } ?: 0
+                val progressiveCandidates = bundle.videoStreams.filter { !it.isAdaptive }
+                val fallback = if (prefRes > 0) {
+                    progressiveCandidates.filter { parseQualityInt(it.quality) in 1..prefRes }
+                        .maxByOrNull { parseQualityInt(it.quality) }
+                        ?: progressiveCandidates.maxByOrNull { parseQualityInt(it.quality) }
+                } else progressiveCandidates.maxByOrNull { parseQualityInt(it.quality) }
+                if (fallback != null) {
+                    finalUrl = fallback.url
+                    finalFormat = fallback.format
+                    finalQuality = fallback.quality
+                    finalIsAdaptive = false
+                    VidlyLog.w("PlayerViewModel", "Download adaptive $quality has no audio; fallback to progressive $finalQuality")
+                }
+            }
+            downloadVideoUseCase(videoId = video.id, url = finalUrl, title = video.title, thumbnailUrl = video.thumbnailUrl, uploaderName = video.uploaderName, quality = finalQuality, format = finalFormat, audioUrl = if (finalIsAdaptive) audioUrl else null)
             _snackbarMessage.emit("Downloading started")
             _downloadState.value = DownloadDialogState.Idle
         }
@@ -1219,8 +1329,8 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             val best = bundle.audioStreams
                 .filter { it.trackType == "ORIGINAL" }
-                .maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
-                ?: bundle.audioStreams.maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
+                .maxByOrNull { parseQualityInt(it.quality) }
+                ?: bundle.audioStreams.maxByOrNull { parseQualityInt(it.quality) }
             if (best == null) {
                 _snackbarMessage.emit("No audio stream available")
                 _downloadState.value = DownloadDialogState.Idle

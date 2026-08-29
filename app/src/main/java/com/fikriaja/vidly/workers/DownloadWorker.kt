@@ -143,21 +143,29 @@ class DownloadWorker @AssistedInject constructor(
 
     private data class StreamMetadata(val videoUrl: String, val audioUrl: String?, val format: String, val quality: String)
 
+    private fun parseQualityInt(q: String): Int {
+        val m = Regex("""(\d+)\s*p""", RegexOption.IGNORE_CASE).find(q)
+        if (m != null) return m.groupValues[1].toIntOrNull() ?: 0
+        return Regex("""\d+""").find(q)?.value?.toIntOrNull() ?: 0
+    }
+
     private suspend fun fetchStreamMetadata(videoId: String, preferredQuality: String?): StreamMetadata? {
         return try {
             VidlyLog.d("DownloadWorker", "Fetching metadata for $videoId (Preferred: $preferredQuality)")
             val bundle = videoRepository.getStreamBundle(videoId)
-            
+
+            val prefRes = preferredQuality?.let { parseQualityInt(it) } ?: 0
             val videoStream = if (!preferredQuality.isNullOrBlank()) {
-                bundle.videoStreams.find { it.quality.contains(preferredQuality, ignoreCase = true) }
-                    ?: bundle.videoStreams.find { 
-                        val res = it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0
-                        val prefRes = preferredQuality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0
-                        res <= prefRes 
-                    } ?: bundle.videoStreams.firstOrNull()
+                bundle.videoStreams.find { it.quality.equals(preferredQuality.trim(), ignoreCase = true) }
+                    ?: bundle.videoStreams.find { parseQualityInt(it.quality) == prefRes }
+                    ?: bundle.videoStreams.filter { parseQualityInt(it.quality) in 1..prefRes }
+                        .maxByOrNull { parseQualityInt(it.quality) }
+                    ?: bundle.videoStreams.maxByOrNull { parseQualityInt(it.quality) }
             } else {
-                bundle.videoStreams.find { it.quality.contains("360") }
-                    ?: bundle.videoStreams.find { it.quality.contains("480") }
+                // Keep legacy default: prefer muxed low res for background worker
+                bundle.videoStreams.filter { !it.isAdaptive }
+                    .minByOrNull { parseQualityInt(it.quality) }
+                    ?: bundle.videoStreams.minByOrNull { parseQualityInt(it.quality) }
                     ?: bundle.videoStreams.firstOrNull()
             }
 
@@ -169,26 +177,33 @@ class DownloadWorker @AssistedInject constructor(
             val audioUrl = if (videoStream.isAdaptive) {
                 val compatibleStreams = bundle.audioStreams.filter { audio ->
                     if (isWebm) {
-                        audio.format.contains("webm", ignoreCase = true) || 
+                        audio.format.contains("webm", ignoreCase = true) ||
                         audio.format.contains("opus", ignoreCase = true)
                     } else {
-                        audio.format.contains("m4a", ignoreCase = true) || 
+                        audio.format.contains("m4a", ignoreCase = true) ||
                         audio.format.contains("aac", ignoreCase = true)
                     }
                 }
 
                 val bestAudio = compatibleStreams.filter { it.trackType == "ORIGINAL" }
-                    .maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
-                    ?: compatibleStreams.maxByOrNull { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
-                
+                    .maxByOrNull { parseQualityInt(it.quality) }
+                    ?: compatibleStreams.maxByOrNull { parseQualityInt(it.quality) }
+
                 bestAudio?.url
             } else null
 
             if (videoStream.isAdaptive && audioUrl == null) {
-                // Fallback to progressive stream if adaptive pairing fails
-                val progressiveStream = bundle.videoStreams.find { !it.isAdaptive }
-                if (progressiveStream != null) {
-                    return StreamMetadata(progressiveStream.url, null, progressiveStream.format, progressiveStream.quality)
+                val progressiveCandidates = bundle.videoStreams.filter { !it.isAdaptive }
+                val fallback = if (prefRes > 0) {
+                    progressiveCandidates.filter { parseQualityInt(it.quality) in 1..prefRes }
+                        .maxByOrNull { parseQualityInt(it.quality) }
+                        ?: progressiveCandidates.maxByOrNull { parseQualityInt(it.quality) }
+                } else {
+                    progressiveCandidates.maxByOrNull { parseQualityInt(it.quality) }
+                }
+                if (fallback != null) {
+                    VidlyLog.w("DownloadWorker", "No compatible audio for ${videoStream.quality}; fallback to progressive ${fallback.quality}")
+                    return StreamMetadata(fallback.url, null, fallback.format, fallback.quality)
                 }
                 VidlyLog.e("DownloadWorker", "Adaptive stream selected but no audio found for $videoId")
                 return null

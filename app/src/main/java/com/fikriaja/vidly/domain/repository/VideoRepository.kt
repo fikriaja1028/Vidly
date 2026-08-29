@@ -24,6 +24,8 @@ interface VideoRepository {
     suspend fun fetchNextChannelVideosPage(channelUrl: String, page: Page): PaginatedList<VideoItem>
     suspend fun getTrendingVideos(): PaginatedList<VideoItem>
     suspend fun fetchNextTrendingPage(page: Page): PaginatedList<VideoItem>
+    suspend fun getShortsVideos(): PaginatedList<VideoItem>
+    suspend fun fetchNextShortsPage(page: Page): PaginatedList<VideoItem>
     suspend fun getPlaylistDetails(playlistUrl: String): PlaylistDetails
     suspend fun getComments(videoId: String): PaginatedList<CommentItem>
     suspend fun fetchNextCommentsPage(videoId: String, page: Page): PaginatedList<CommentItem>

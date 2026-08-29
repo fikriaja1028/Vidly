@@ -26,6 +26,9 @@ sealed interface Destination {
     }
     @Serializable data object Settings : Destination
     @Serializable data object History : Destination
+    @Serializable data object Shorts : Destination {
+        override val isTopLevel: Boolean get() = true
+    }
     @Serializable data object SubscriptionsList : Destination
     @Serializable data object Downloads : Destination
     @Serializable data class Channel(val channelUrl: String) : Destination
@@ -45,6 +48,7 @@ fun String?.toDestination(): Destination? {
     val route = this ?: return null
     return when {
         route.contains("Home") -> Destination.Home
+        route.contains("Shorts") -> Destination.Shorts
         route.contains("Subscriptions") -> Destination.Subscriptions
         route.contains("Library") -> Destination.Library
         route.contains("Search") -> {

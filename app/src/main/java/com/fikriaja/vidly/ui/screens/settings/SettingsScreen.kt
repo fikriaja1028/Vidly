@@ -86,6 +86,8 @@ import com.fikriaja.vidly.BuildConfig
 import com.fikriaja.vidly.ui.components.GlassSurface
 import com.fikriaja.vidly.ui.components.LanguageSelectionSheet
 import com.fikriaja.vidly.ui.screens.library.GlobalGlassAlpha
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
 
 @Composable
 fun SettingsScreen(
@@ -103,6 +105,8 @@ fun SettingsScreen(
     // FEATURE (Private mode + Biometric lock)
     val isPrivateSession by viewModel.isPrivateSession.collectAsStateWithLifecycle()
     val isAppLockEnabled by viewModel.isAppLockEnabled.collectAsStateWithLifecycle()
+    val isLoopVideoEnabled by viewModel.isLoopVideoEnabled.collectAsStateWithLifecycle()
+    val isLoopPlaylistEnabled by viewModel.isLoopPlaylistEnabled.collectAsStateWithLifecycle()
     val subtitleFontSize by viewModel.subtitleFontSize.collectAsStateWithLifecycle()
     val subtitleBackgroundOpacity by viewModel.subtitleBackgroundOpacity.collectAsStateWithLifecycle()
     val appLanguage by viewModel.appLanguage.collectAsStateWithLifecycle()
@@ -118,6 +122,8 @@ fun SettingsScreen(
         isDynamicColorEnabled = isDynamicColorEnabled,
         isPrivateSession = isPrivateSession,
         isAppLockEnabled = isAppLockEnabled,
+        isLoopVideoEnabled = isLoopVideoEnabled,
+        isLoopPlaylistEnabled = isLoopPlaylistEnabled,
         subtitleFontSize = subtitleFontSize,
         subtitleBackgroundOpacity = subtitleBackgroundOpacity,
         appLanguage = appLanguage,
@@ -137,6 +143,8 @@ fun SettingsScreen(
         onClearAllDownloads = viewModel::clearAllDownloads,
         onSetPrivateSession = viewModel::setPrivateSession,
         onSetAppLockEnabled = viewModel::setAppLockEnabled,
+        onSetLoopVideoEnabled = viewModel::setLoopVideoEnabled,
+        onSetLoopPlaylistEnabled = viewModel::setLoopPlaylistEnabled,
         onViewHistory = onViewHistory,
         onDataManagement = onDataManagement,
         onBack = onBack
@@ -153,6 +161,8 @@ private fun SettingsContent(
     isDynamicColorEnabled: Boolean,
     isPrivateSession: Boolean,
     isAppLockEnabled: Boolean,
+    isLoopVideoEnabled: Boolean,
+    isLoopPlaylistEnabled: Boolean,
     subtitleFontSize: Float,
     subtitleBackgroundOpacity: Float,
     appLanguage: String?,
@@ -172,6 +182,8 @@ private fun SettingsContent(
     onClearAllDownloads: () -> Unit,
     onSetPrivateSession: (Boolean) -> Unit,
     onSetAppLockEnabled: (Boolean) -> Unit,
+    onSetLoopVideoEnabled: (Boolean) -> Unit,
+    onSetLoopPlaylistEnabled: (Boolean) -> Unit,
     onViewHistory: () -> Unit,
     onDataManagement: () -> Unit,
     onBack: () -> Unit
@@ -396,6 +408,27 @@ private fun SettingsContent(
                         icon = Icons.Default.AutoAwesome,
                         onClick = { showClearInterestsDialog = true },
                         titleColor = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            // Playback Loops Category – FEATURE (Loop video & playlist)
+            item {
+                SettingsGroup(title = "Playback Loops") {
+                    SettingsSwitchItem(
+                        title = "Loop video",
+                        subtitle = "Repeat the current video automatically (single loop). Works for any video.",
+                        icon = Icons.Default.RepeatOne,
+                        checked = isLoopVideoEnabled,
+                        onCheckedChange = onSetLoopVideoEnabled
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsSwitchItem(
+                        title = "Loop playlist",
+                        subtitle = "When playing a playlist, restart from the first video after the last one finishes.",
+                        icon = Icons.Default.Repeat,
+                        checked = isLoopPlaylistEnabled,
+                        onCheckedChange = onSetLoopPlaylistEnabled
                     )
                 }
             }
