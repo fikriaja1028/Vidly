@@ -113,21 +113,21 @@ This single update bundles **2 major new features** along with comprehensive fix
 
 ---
 
-## [1.0.2] - Update 3: New Features, Loops, Shorts & Quality Fixes
+## [1.0.2] - Update 3: New Features, Shorts & Quality Fixes
 
-### Fixed
-- **Background Playback Shorts**: Fixed a bug where Shorts videos continued playing after navigating away to another page. Added lifecycle management to automatically pause the player when navigating out.
-- **Audio Conflict**: Added an auto-pause function for the main player when entering the Shorts page to prevent audio clashes.
-- **Shorts Algorithm**: Fixed the search filter and Shorts feed to properly display Portrait videos (duration ≤ 60 seconds) instead of long Landscape videos.
-- **UI Overlap**: Fixed the Shorts UI layout (channel name, action buttons) that was previously obscured by the Bottom Navigation Bar.
-
-### Added
+### New Features:
 - **Hold for 2x Speed**: Hold the screen to speed up video playback to 2x. Available in both Shorts and the main Player.
 - **Smart Speed Revert**: Video speed automatically returns to the user's original setting (e.g., 0.5x or 1.25x) after lifting their finger from the screen, instead of resetting to 1x.
 - **Smart Navigation**:
     - Tapping an already active tab icon will trigger a **Refresh/Reload** of the content.
     - Tapping a tab icon while on a sub-page will perform a **Pop to Root** (return to the tab's main page).
 - **Immersive Shorts UI**: Hides the Top App Bar (Vidly logo, Search, Incognito) specifically on the Shorts page for a cleaner, more immersive experience.
+
+### Fixed
+- **Background Playback Shorts**: Fixed a bug where Shorts videos continued playing after navigating away to another page. Added lifecycle management to automatically pause the player when navigating out.
+- **Audio Conflict**: Added an auto-pause function for the main player when entering the Shorts page to prevent audio clashes.
+- **Shorts Algorithm**: Fixed the search filter and Shorts feed to properly display Portrait videos (duration ≤ 60 seconds) instead of long Landscape videos.
+- **UI Overlap**: Fixed the Shorts UI layout (channel name, action buttons) that was previously obscured by the Bottom Navigation Bar.
 
 ### Changed
 - Optimized gesture detector to better distinguish between tap, double tap, and long press with improved accuracy and no conflicts.
