@@ -407,22 +407,25 @@ fun VideoList(
     isLoadingMore: Boolean = false,
     header: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(bottom = 100.dp)
+    contentPadding: PaddingValues = PaddingValues(bottom = 100.dp),
+    listState: androidx.compose.foundation.lazy.LazyListState? = null,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState? = null
 ) {
     val configuration = LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp
     val columns = Constants.calculateGridColumns(screenWidth)
 
     if (columns > 1) {
-        val gridState = rememberLazyGridState()
+        val internalGridState = rememberLazyGridState()
+        val effectiveGridState = gridState ?: internalGridState
         InfiniteScrollGridEffect(
-            gridState = gridState,
+            gridState = effectiveGridState,
             enabled = onLoadMore != null && videos.isNotEmpty() && !isLoadingMore,
             onLoadMore = { onLoadMore?.invoke() }
         )
 
         LazyVerticalGrid(
-            state = gridState,
+            state = effectiveGridState,
             columns = GridCells.Fixed(columns),
             modifier = modifier.fillMaxSize(),
             contentPadding = contentPadding,
@@ -491,15 +494,16 @@ fun VideoList(
             }
         }
     } else {
-        val listState = rememberLazyListState()
+        val internalListState = rememberLazyListState()
+        val effectiveListState = listState ?: internalListState
         InfiniteScrollEffect(
-            listState = listState,
+            listState = effectiveListState,
             enabled = onLoadMore != null && videos.isNotEmpty() && !isLoadingMore,
             onLoadMore = { onLoadMore?.invoke() }
         )
 
         LazyColumn(
-            state = listState,
+            state = effectiveListState,
             modifier = modifier.fillMaxSize(),
             contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(0.dp)

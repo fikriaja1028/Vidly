@@ -45,8 +45,8 @@ fun VideoPlayerGestureDetector(
                 coroutineScope {
                     var tapCount = 0
                     var tapJob: kotlinx.coroutines.Job? = null
+                    var longPressJob: kotlinx.coroutines.Job? = null
                     var tapDownPosition = Offset.Unspecified
-                    var pointerLifted = false
                     var pointerMoved = false
                     var isLongPressed = false
                     
@@ -56,54 +56,78 @@ fun VideoPlayerGestureDetector(
                             val down = event.changes.find { it.changedToDownIgnoreConsumed() }
                             
                             if (down != null) {
-                                tapCount++
-                                tapJob?.cancel()
-                                tapDownPosition = down.position
-                                pointerLifted = false
-                                pointerMoved = false
-                                isLongPressed = false
-                                
                                 val isLeftSide = (down.position.x < size.width / 2)
-                                
-                                val longPressJob = launch {
-                                    delay(500)
-                                    if (tapCount == 1 && !pointerLifted && !pointerMoved) {
-                                        isLongPressed = true
-                                        onLongPressStart()
-                                    }
-                                }
-
-                                if (tapCount >= 2) {
-                                    longPressJob.cancel()
+                                // Second tap within window -> double tap (cancel long-press/single)
+                                if (tapCount == 1 && tapJob?.isActive == true) {
+                                    tapJob?.cancel()
+                                    longPressJob?.cancel()
                                     down.consume()
                                     if (isLeftSide) onDoubleTapLeft() else onDoubleTapRight()
                                     tapCount = 0
-                                } else {
-                                    tapJob = launch {
-                                        delay(doubleTapTimeout)
-                                        if (tapCount == 1 && pointerLifted && !pointerMoved && !isLongPressed) {
-                                            onSingleTap()
-                                        }
-                                        tapCount = 0
+                                    tapDownPosition = Offset.Unspecified
+                                    pointerMoved = false
+                                    isLongPressed = false
+                                    continue
+                                }
+                                // First tap
+                                tapCount = 1
+                                tapDownPosition = down.position
+                                pointerMoved = false
+                                isLongPressed = false
+                                tapJob?.cancel()
+                                longPressJob?.cancel()
+                                longPressJob = launch {
+                                    delay(500)
+                                    if (!pointerMoved && !isLongPressed && tapCount == 1) {
+                                        isLongPressed = true
+                                        tapJob?.cancel()
+                                        onLongPressStart()
                                     }
                                 }
                             } else {
                                 val change = event.changes.firstOrNull()
                                 if (change != null) {
-                                    if (change.changedToUpIgnoreConsumed()) {
-                                        pointerLifted = true
-                                        if (isLongPressed) {
-                                            onLongPressEnd()
-                                            isLongPressed = false
-                                        }
-                                    }
-                                    if (tapDownPosition != Offset.Unspecified &&
+                                    // Movement -> cancel long-press / pending singleTap (it's a drag)
+                                    if (!pointerMoved && tapDownPosition != Offset.Unspecified &&
                                         (change.position - tapDownPosition).getDistance() > viewConfiguration.touchSlop
                                     ) {
                                         pointerMoved = true
+                                        longPressJob?.cancel()
                                         if (isLongPressed) {
                                             onLongPressEnd()
                                             isLongPressed = false
+                                            tapCount = 0
+                                            tapDownPosition = Offset.Unspecified
+                                        } else {
+                                            // drag cancels pending singleTap
+                                            tapJob?.cancel()
+                                            tapCount = 0
+                                            tapDownPosition = Offset.Unspecified
+                                        }
+                                    }
+                                    if (change.changedToUpIgnoreConsumed()) {
+                                        if (isLongPressed) {
+                                            onLongPressEnd()
+                                            isLongPressed = false
+                                            tapCount = 0
+                                            tapDownPosition = Offset.Unspecified
+                                            longPressJob?.cancel()
+                                            tapJob?.cancel()
+                                        } else if (tapCount == 1 && !pointerMoved) {
+                                            // schedule singleTap after doubleTap window
+                                            tapJob?.cancel()
+                                            tapJob = launch {
+                                                delay(doubleTapTimeout)
+                                                if (tapCount == 1 && !pointerMoved && !isLongPressed) {
+                                                    onSingleTap()
+                                                }
+                                                tapCount = 0
+                                                tapDownPosition = Offset.Unspecified
+                                            }
+                                        } else if (pointerMoved) {
+                                            // drag ended, ensure reset
+                                            tapCount = 0
+                                            tapDownPosition = Offset.Unspecified
                                         }
                                     }
                                 }

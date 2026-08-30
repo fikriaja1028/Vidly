@@ -7,6 +7,8 @@ package com.fikriaja.vidly.ui.screens.home
 
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -18,6 +20,11 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.fikriaja.vidly.MainViewModel
+import com.fikriaja.vidly.ui.navigation.Destination
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Subscriptions
@@ -218,6 +225,21 @@ private fun HomeContent(
         }
     }
 
+    // Scroll-to-top: bottom-bar always triggers MainViewModel.scrollToTopEvent. Hoist
+    // the List/Grid states here so we can animate to 0 on that event.
+    val activity = LocalActivity.current as ComponentActivity
+    val mainViewModel: MainViewModel = hiltViewModel(activity)
+    val homeListState = rememberLazyListState()
+    val homeGridState = rememberLazyGridState()
+    LaunchedEffect(Unit) {
+        mainViewModel.scrollToTopEvent.collect { tab ->
+            if (tab == Destination.Home.routeRoot) {
+                try { homeListState.scrollToItem(0) } catch (_: Exception) {}
+                try { homeGridState.scrollToItem(0) } catch (_: Exception) {}
+            }
+        }
+    }
+
     // Header Scroll State
     val density = LocalDensity.current
     var headerHeightPx by remember { mutableFloatStateOf(0f) }
@@ -376,6 +398,8 @@ private fun HomeContent(
                         onAddToPlaylistClick = onAddToPlaylistClick,
                         onLoadMore = onLoadMore,
                         isLoadingMore = state.isLoadingMore,
+                        listState = homeListState,
+                        gridState = homeGridState,
                         header = {
                             ContinuePlayingSection(
                                 videos = state.continuePlayingVideos,

@@ -94,6 +94,10 @@ class ShortsViewModel @Inject constructor(
                     playShort(0)
                 } else {
                     VidlyLog.w("ShortsViewModel", "No shorts videos found in result")
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = "No Shorts videos found. Please try again later."
+                    )
                 }
             } catch (e: Exception) {
                 VidlyLog.e("ShortsViewModel", "loadShorts failed", e)

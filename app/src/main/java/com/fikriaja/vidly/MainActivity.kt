@@ -714,9 +714,9 @@ fun VidlyBottomBar(
         
         items.forEach { (destination, icon, label) ->
             val routeRoot = destination.routeRoot
-            val isSelected = currentDestination?.hierarchy?.any { 
-                it.route?.contains(routeRoot, ignoreCase = true) == true 
-            } == true
+            // Use toDestination() for flat graph, plus hierarchy fallback
+            val currentTopLevel = currentDestination?.route?.toDestination()
+            val isSelected = currentTopLevel?.routeRoot == routeRoot
             
             NavigationBarItem(
                 icon = { 
@@ -742,29 +742,23 @@ fun VidlyBottomBar(
                     indicatorColor = Color.Transparent // Modern transparent indicator
                 ),
                 onClick = {
-                    if (isSelected) {
-                        // Already on this tab's hierarchy.
-                        val currentRoute = navBackStackEntry?.destination?.route ?: ""
-                        // If we're not at the root (exactly the destination class), pop back.
-                        // Or if it's Search, check if query is different.
-                        val isAtRoot = currentRoute.endsWith(routeRoot)
-                        
-                        if (!isAtRoot) {
-                            // Pop to root of this tab
-                            navController.popBackStack(destination, inclusive = false)
-                        } else {
-                            // At root, trigger refresh
-                            mainViewModel.triggerTabRefresh(routeRoot)
+                    // Requirement: klik navbar selalu ke main page halaman itu, fresh reload + scroll ke atas.
+                    // 1. Jika tap tab yang sedang aktif -> pop ke main (clear tumpukan) + scroll + reload.
+                    // 2. Jika pindah tab -> fresh main page + reload + scroll.
+                    // 3. Khusus Search -> selalu ke Search kosong (clear query).
+                    // Untuk itu kita selalu navigate fresh dengan popUpTo(start) + trigger reload.
+                    // Ini sekaligus meng-handle: Library -> Search (query) -> tap Library = balik ke Library main.
+                    navController.navigate(destination) {
+                        // Clear seluruh tumpukan di atas start destination (Home) agar deep stack seperti
+                        // Library -> History -> Channel terbuang dan balik ke main page.
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = false
                         }
-                    } else {
-                        navController.navigate(destination) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
+                        launchSingleTop = true
+                        restoreState = false
                     }
+                    // Trigger reload + scroll-to-top yang di-collect di NavGraph (Home/Shorts/Library/Search/Subscriptions)
+                    mainViewModel.triggerTabRefresh(routeRoot)
                 }
             )
         }

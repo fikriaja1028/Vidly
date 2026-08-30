@@ -7,7 +7,6 @@ package com.fikriaja.vidly.data.repository
 
 import android.util.LruCache
 import com.fikriaja.vidly.data.local.PreferencesManager
-import com.fikriaja.vidly.data.local.UserInterestDao
 import com.fikriaja.vidly.data.network.NewPipeInitializer
 import com.fikriaja.vidly.domain.model.*
 import com.fikriaja.vidly.domain.repository.VideoRepository
@@ -33,8 +32,7 @@ import javax.inject.Singleton
 @Singleton
 class VideoRepositoryImpl @Inject constructor(
     private val preferencesManager: PreferencesManager,
-    private val initializer: NewPipeInitializer,
-    private val userInterestDao: UserInterestDao
+    private val initializer: NewPipeInitializer
 ) : VideoRepository {
     private val streamCache = LruCache<String, StreamBundle>(Constants.STREAM_CACHE_SIZE)
     private val commentsCache = LruCache<String, CommentsInfoItem>(100)
@@ -277,103 +275,75 @@ class VideoRepositoryImpl @Inject constructor(
     override suspend fun getShortsVideos(): PaginatedList<VideoItem> {
         ensureInit()
         return withContext(Dispatchers.IO) {
-            // 1. Try dedicated Shorts kiosks
-            val candidates = listOf(
-                "https://www.youtube.com/shorts",
-                "https://www.youtube.com/feed/shorts"
-            )
-            for (url in candidates) {
-                try {
-                    val kiosk = KioskInfo.getInfo(ServiceList.YouTube, url)
-                    val items = kiosk.relatedItems.filterIsInstance<StreamInfoItem>().map { mapToVideoItem(it) }
-                    if (items.isNotEmpty()) {
-                        // Filter out long videos if any somehow crept in
-                        val filtered = items.filter { it.duration in 1..90 } 
-                        if (filtered.isNotEmpty()) {
-                            VidlyLog.d("VideoRepository", "Shorts kiosk success via $url : ${filtered.size} items")
-                            return@withContext PaginatedList(filtered, kiosk.nextPage)
-                        }
-                    }
-                } catch (e: Exception) {
-                    VidlyLog.d("VideoRepository", "Shorts kiosk $url failed: ${e.message}")
-                }
-            }
-
-            // 2. Personalized search fallbacks based on user interests
+            // 1. Try Search for #shorts (Most reliable for Shorts feed)
             try {
-                val topInterests = userInterestDao.getTopInterests(3)
-                val query = if (topInterests.isNotEmpty()) {
-                    topInterests.joinToString(" ") { it.keyword } + " shorts"
-                } else {
-                    "shorts"
-                }
-                
                 val youtubeService = ServiceList.YouTube
-                val extractor = youtubeService.getSearchExtractor(query, listOf("videos"), "relevance")
+                val extractor = youtubeService.getSearchExtractor("#shorts", listOf("videos"), "relevance")
                 extractor.fetchPage()
                 val items = extractor.initialPage.items.filterIsInstance<StreamInfoItem>()
                     .map { mapToVideoItem(it) }
-                    .filter { it.duration in 1..65 } // Strict duration for shorts
+                    // Relax filter: search results for #shorts are almost always shorts.
+                    // Allow -1L (unknown duration) which is common in search results.
+                    .filter { it.duration in 1..95 || it.duration == -1L }
                 
                 if (items.isNotEmpty()) {
-                    VidlyLog.d("VideoRepository", "Shorts search success: ${items.size} items for query: $query")
+                    VidlyLog.d("VideoRepository", "Shorts search success: ${items.size} items")
                     return@withContext PaginatedList(items.shuffled(), extractor.initialPage.nextPage)
                 }
             } catch (e: Exception) {
-                VidlyLog.d("VideoRepository", "Shorts search failed: ${e.message}")
+                VidlyLog.e("VideoRepository", "Shorts search failed", e)
             }
 
-            // 3. Fallback: use trending but filter STRICTLY to short videos
+            // 2. Try hashtag kiosk
+            try {
+                val kiosk = KioskInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/hashtag/shorts")
+                val items = kiosk.relatedItems.filterIsInstance<StreamInfoItem>().map { mapToVideoItem(it) }
+                if (items.isNotEmpty()) {
+                    VidlyLog.d("VideoRepository", "Shorts hashtag success: ${items.size} items")
+                    return@withContext PaginatedList(items.shuffled(), kiosk.nextPage)
+                }
+            } catch (e: Exception) {
+                VidlyLog.d("VideoRepository", "Shorts hashtag failed: ${e.message}")
+            }
+
+            // 3. Last Fallback: Trending filtered
             try {
                 val kiosk = KioskInfo.getInfo(ServiceList.YouTube, Constants.YouTube.TRENDING_URL)
                 val all = kiosk.relatedItems.filterIsInstance<StreamInfoItem>().map { mapToVideoItem(it) }
-                val shorts = all.filter { it.duration in 1..62 } // YouTube Shorts are max 60s
+                val shorts = all.filter { it.duration in 1..100 || it.duration == -1L }
+                val result = if (shorts.isNotEmpty()) shorts else all
                 
-                if (shorts.isNotEmpty()) {
-                    VidlyLog.d("VideoRepository", "Shorts fallback trending: ${shorts.size} items")
-                    return@withContext PaginatedList(shorts.shuffled(), kiosk.nextPage)
-                }
+                VidlyLog.d("VideoRepository", "Shorts fallback trending: ${result.size} items")
+                return@withContext PaginatedList(result.shuffled(), kiosk.nextPage)
             } catch (e: Exception) {
                 VidlyLog.e("VideoRepository", "Shorts final fallback failed", e)
             }
 
-            return@withContext PaginatedList(emptyList(), null)
+            PaginatedList(emptyList(), null)
         }
     }
 
     override suspend fun fetchNextShortsPage(page: Page): PaginatedList<VideoItem> {
         ensureInit()
         return withContext(Dispatchers.IO) {
-            // Try to continue previous Shorts kiosk or search
-            // If the page is from a search or kiosk, KioskInfo.getMoreItems or SearchExtractor.getPage works
-            val shortsUrls = listOf(
-                "https://www.youtube.com/shorts",
-                "https://www.youtube.com/feed/shorts"
-            )
-            for (url in shortsUrls) {
-                try {
-                    val next = KioskInfo.getMoreItems(ServiceList.YouTube, url, page)
-                    val items = next.items.filterIsInstance<StreamInfoItem>()
-                        .map { mapToVideoItem(it) }
-                        .filter { it.duration in 1..90 }
-                    if (items.isNotEmpty()) {
-                        return@withContext PaginatedList(items, if (next.hasNextPage()) next.nextPage else null)
-                    }
-                } catch (_: Exception) { }
-            }
-            
-            // Fallback for search or trending continuation
+            // Try to continue previous worked method via its page object
             try {
-                // trending continuation
+                // For YouTube, KioskInfo.getMoreItems handles most continuations
+                // We try hashtag first as it's a common kiosk URL
+                val next = KioskInfo.getMoreItems(ServiceList.YouTube, "https://www.youtube.com/hashtag/shorts", page)
+                val items = next.items.filterIsInstance<StreamInfoItem>().map { mapToVideoItem(it) }
+                if (items.isNotEmpty()) {
+                    return@withContext PaginatedList(items, if (next.hasNextPage()) next.nextPage else null)
+                }
+            } catch (_: Exception) { }
+            
+            try {
                 val next = KioskInfo.getMoreItems(ServiceList.YouTube, Constants.YouTube.TRENDING_URL, page)
-                val items = next.items.filterIsInstance<StreamInfoItem>()
-                    .map { mapToVideoItem(it) }
-                    .filter { it.duration in 1..65 }
-                
+                val items = next.items.filterIsInstance<StreamInfoItem>().map { mapToVideoItem(it) }
                 return@withContext PaginatedList(items, if (next.hasNextPage()) next.nextPage else null)
             } catch (e: Exception) {
                 VidlyLog.e("VideoRepository", "fetchNextShortsPage failed", e)
-                return@withContext PaginatedList(emptyList(), null)
+                PaginatedList(emptyList(), null)
             }
         }
     }

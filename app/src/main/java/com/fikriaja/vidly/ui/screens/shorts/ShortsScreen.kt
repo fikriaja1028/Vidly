@@ -17,6 +17,8 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.fikriaja.vidly.MainViewModel
+import com.fikriaja.vidly.ui.navigation.Destination
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -104,6 +106,15 @@ fun ShortsScreen(
             }
         } else {
             val pagerState = rememberPagerState(pageCount = { videos.size })
+            val mainViewModel: MainViewModel = hiltViewModel(activity)
+            // Bottom-bar tap always resets Shorts to page 0 (scroll-to-top) via shared flow
+            LaunchedEffect(Unit) {
+                mainViewModel.scrollToTopEvent.collect { tab ->
+                    if (tab == Destination.Shorts.routeRoot) {
+                        try { pagerState.scrollToPage(0) } catch (_: Exception) {}
+                    }
+                }
+            }
 
             // Sync pager with ViewModel
             LaunchedEffect(pagerState.currentPage) {
@@ -159,7 +170,7 @@ private fun ShortsPlayerPage(
     var isSpeedBoosting by remember { mutableStateOf(false) }
     var originalSpeed by remember { mutableFloatStateOf(1f) }
     val isFavorite by viewModel.isFavoriteFlow(video.id).collectAsStateWithLifecycle(initialValue = false)
-    val scope = rememberCoroutineScope()
+    val holdScope = rememberCoroutineScope()
 
     // Keep play state synced with player when page visible
     LaunchedEffect(isCurrentPage) {
@@ -174,53 +185,60 @@ private fun ShortsPlayerPage(
             .background(Color.Black)
             .pointerInput(isCurrentPage) {
                 if (!isCurrentPage) return@pointerInput
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    var isLongPress = false
-                    var pointerMoved = false
-                    val job = scope.launch {
-                        delay(500) // Long press threshold
-                        if (!pointerMoved) {
-                            isLongPress = true
-                            isSpeedBoosting = true
-                            originalSpeed = player.playbackParameters.speed
-                            viewModel.setPlaybackSpeed(2f)
+                // FIX: loop forever so 2x works repeatedly (previously awaitEachGesture ran only once)
+                while (true) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var isLongPress = false
+                        var pointerMoved = false
+                        val longPressJob = holdScope.launch {
+                            delay(500) // Long press threshold
+                            if (!pointerMoved) {
+                                isLongPress = true
+                                isSpeedBoosting = true
+                                originalSpeed = try { player.playbackParameters.speed } catch (_: Exception) { 1f }
+                                viewModel.setPlaybackSpeed(2f)
+                            }
                         }
-                    }
-                    
-                    // Track movement to cancel long press if swiping
-                    var up: androidx.compose.ui.input.pointer.PointerInputChange? = null
-                    while (up == null) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull() ?: break
-                        if (change.changedToUpIgnoreConsumed()) {
-                            up = change
-                        } else {
+                        
+                        var up: androidx.compose.ui.input.pointer.PointerInputChange? = null
+                        // await until finger lifts or gesture cancelled
+                        while (up == null) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+                            if (change.changedToUpIgnoreConsumed()) {
+                                up = change
+                                break
+                            }
+                            // If finger moves beyond slop -> treat as swipe (VerticalPager) and cancel long-press
                             if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
                                 pointerMoved = true
+                                longPressJob.cancel()
                                 if (isLongPress) {
                                     isLongPress = false
                                     isSpeedBoosting = false
                                     viewModel.setPlaybackSpeed(originalSpeed)
                                 }
+                                // don't break immediately; still wait for up so we don't mis-fire tap
                             }
                         }
-                    }
-                    
-                    job.cancel()
-                    if (isLongPress) {
-                        isSpeedBoosting = false
-                        viewModel.setPlaybackSpeed(originalSpeed)
-                    } else if (up != null && !pointerMoved) {
-                        // Regular tap (only if didn't move much)
-                        if (player.isPlaying) {
-                            viewModel.pause()
-                            isPlaying = false
-                        } else {
-                            viewModel.resume()
-                            isPlaying = true
+                        
+                        longPressJob.cancel()
+                        if (isLongPress) {
+                            // hold finished -> restore original speed
+                            isSpeedBoosting = false
+                            viewModel.setPlaybackSpeed(originalSpeed)
+                        } else if (up != null && !pointerMoved) {
+                            // Regular tap (only if didn't move much)
+                            if (player.isPlaying) {
+                                viewModel.pause()
+                                isPlaying = false
+                            } else {
+                                viewModel.resume()
+                                isPlaying = true
+                            }
+                            showPlayIcon = true
                         }
-                        showPlayIcon = true
                     }
                 }
             }

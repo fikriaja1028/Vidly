@@ -66,8 +66,16 @@ class MainViewModel @Inject constructor(
     private val _refreshTabEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val refreshTabEvent = _refreshTabEvent.asSharedFlow()
 
+    // Scroll-to-top event: emitted together with refreshTabEvent. Screens collect this
+    // to animate/scroll their LazyListState / LazyGridState / PagerState to position 0.
+    // Keeping separate flow makes intent explicit; triggerTabRefresh emits to both so
+    // a single bottom-bar tap always does "fresh reload + scroll to top".
+    private val _scrollToTopEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val scrollToTopEvent = _scrollToTopEvent.asSharedFlow()
+
     fun triggerTabRefresh(tabName: String) {
         _refreshTabEvent.tryEmit(tabName)
+        _scrollToTopEvent.tryEmit(tabName)
     }
 
     fun toggleIncognitoMode() {

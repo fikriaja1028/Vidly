@@ -15,8 +15,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.fikriaja.vidly.ui.navigation.Destination
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -185,7 +190,21 @@ private fun SearchContent(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
     val lifecycleOwner = LocalLifecycleOwner.current
+    
+    // Scroll-to-top on bottom-bar tap: also scrollToItem(0) so Search always reopens empty at top.
+    // Search query is already cleared via refreshTabEvent in NavGraph; this ensures list snap.
+    val activity = LocalActivity.current as ComponentActivity
+    val searchMainVm: MainViewModel = hiltViewModel(activity)
+    LaunchedEffect(Unit) {
+        searchMainVm.scrollToTopEvent.collect { tab ->
+            if (tab == Destination.Search("").routeRoot) {
+                try { listState.scrollToItem(0) } catch (_: Exception) {}
+                try { gridState.scrollToItem(0) } catch (_: Exception) {}
+            }
+        }
+    }
     
     // Reset scroll state when a new search query is initiated
     LaunchedEffect(searchQuery) {
@@ -479,7 +498,6 @@ private fun SearchContent(
                                     val finalColumns = if (isGridView) gridColumns else 1
 
                                     if (finalColumns > 1) {
-                                        val gridState = rememberLazyGridState()
                                         InfiniteScrollGridEffect(
                                             gridState = gridState,
                                             enabled = !state.isLoadingMore,

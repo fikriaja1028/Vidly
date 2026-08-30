@@ -38,10 +38,16 @@ import com.fikriaja.vidly.data.local.FavoriteEntity
 import com.fikriaja.vidly.data.local.HistoryEntity
 import com.fikriaja.vidly.data.local.SubscriptionEntity
 import com.fikriaja.vidly.domain.model.VideoItem
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.fikriaja.vidly.utils.rememberScrollVisibilityConnection
 import com.fikriaja.vidly.ui.components.ThumbnailImage
 import com.fikriaja.vidly.utils.VideoUtils
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.fikriaja.vidly.MainViewModel
+import com.fikriaja.vidly.ui.navigation.Destination
 
 @Composable
 fun LibraryScreen(
@@ -115,6 +121,16 @@ private fun LibraryDashboard(
     onPlaylistClick: (String) -> Unit
 ) {
     val scrollVisibilityConnection = rememberScrollVisibilityConnection(onBarsVisibilityChange)
+    val listState = rememberLazyListState()
+    val activity = LocalActivity.current as ComponentActivity
+    val mainViewModel: MainViewModel = hiltViewModel(activity)
+    LaunchedEffect(Unit) {
+        mainViewModel.scrollToTopEvent.collect { tab ->
+            if (tab == Destination.Library.routeRoot) {
+                try { listState.scrollToItem(0) } catch (_: Exception) {}
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -167,6 +183,7 @@ private fun LibraryDashboard(
         }
 
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollVisibilityConnection),

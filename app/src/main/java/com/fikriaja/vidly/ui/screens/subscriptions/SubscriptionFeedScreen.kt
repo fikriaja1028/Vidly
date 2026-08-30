@@ -11,7 +11,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.fikriaja.vidly.MainViewModel
+import com.fikriaja.vidly.ui.navigation.Destination
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Subscriptions
@@ -160,6 +167,21 @@ private fun SubscriptionFeedContent(
     val scrollVisibilityConnection = rememberScrollVisibilityConnection(onBarsVisibilityChange)
     val bubbleListState = androidx.compose.foundation.lazy.rememberLazyListState()
 
+    // Scroll-to-top on bottom-bar tap: hoist VideoList states and collect mainViewModel.scrollToTopEvent
+    val activity = LocalActivity.current as ComponentActivity
+    val mainViewModel: MainViewModel = hiltViewModel(activity)
+    val subsListState = rememberLazyListState()
+    val subsGridState = rememberLazyGridState()
+    LaunchedEffect(Unit) {
+        mainViewModel.scrollToTopEvent.collect { tab ->
+            if (tab == Destination.Subscriptions.routeRoot) {
+                try { subsListState.scrollToItem(0) } catch (_: Exception) {}
+                try { subsGridState.scrollToItem(0) } catch (_: Exception) {}
+                try { bubbleListState.scrollToItem(0) } catch (_: Exception) {}
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -285,6 +307,8 @@ private fun SubscriptionFeedContent(
                                 onAddToPlaylistClick = onAddToPlaylistClick,
                                 onLoadMore = onLoadMore,
                                 isLoadingMore = activeFeed.isLoadingMore,
+                                listState = subsListState,
+                                gridState = subsGridState,
                                 header = {
                                     if (state.subscriptions.isNotEmpty()) {
                                         Column {
