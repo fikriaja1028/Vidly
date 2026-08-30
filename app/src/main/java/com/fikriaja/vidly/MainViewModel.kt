@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import javax.inject.Inject
@@ -60,6 +62,13 @@ class MainViewModel @Inject constructor(
 
     val isOnboardingCompleted: StateFlow<Boolean?> = preferencesManager.isOnboardingCompleted
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private val _refreshTabEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val refreshTabEvent = _refreshTabEvent.asSharedFlow()
+
+    fun triggerTabRefresh(tabName: String) {
+        _refreshTabEvent.tryEmit(tabName)
+    }
 
     fun toggleIncognitoMode() {
         viewModelScope.launch {

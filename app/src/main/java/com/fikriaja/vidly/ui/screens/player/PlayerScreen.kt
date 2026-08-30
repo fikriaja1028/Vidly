@@ -108,6 +108,7 @@ import android.content.res.Configuration
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -448,6 +449,7 @@ private fun PlayerContent(
     var showCommentsSheet by remember { mutableStateOf(false) }
     var showQueueSheet by remember { mutableStateOf(false) }
     var controlsVisible by remember { mutableStateOf(true) }
+    var isSpeedBoosting by remember { mutableStateOf(false) }
 
     LaunchedEffect(videoId) {
         onLoadComments()
@@ -1051,12 +1053,54 @@ private fun PlayerContent(
                                     brightnessOverlayVisible = false
                                 },
                                 onDragEnd = { isDragging = false },
-                                onDragCancel = { isDragging = false }
+                                onDragCancel = { isDragging = false },
+                                onLongPressStart = {
+                                    isSpeedBoosting = true
+                                    player.setPlaybackSpeed(2f)
+                                },
+                                onLongPressEnd = {
+                                    isSpeedBoosting = false
+                                    player.setPlaybackSpeed(playbackSpeed) // Revert to previous speed from state
+                                }
                             ) {
                                 VideoPlayerView(
                                     player = player,
                                     modifier = Modifier.fillMaxSize()
                                 )
+
+                                // 2x Speed Indicator
+                                if (isSpeedBoosting) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 48.dp),
+                                        contentAlignment = Alignment.TopCenter
+                                    ) {
+                                        Surface(
+                                            color = Color.Black.copy(alpha = 0.5f),
+                                            shape = RoundedCornerShape(20.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.FastForward,
+                                                    contentDescription = null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "2x Speed",
+                                                    color = Color.White,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
 
                                 // Manual Subtitle Overlay
                                 if (isCcEnabled && activeCues.isNotEmpty()) {

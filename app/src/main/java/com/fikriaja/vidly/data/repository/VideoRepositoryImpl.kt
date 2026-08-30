@@ -280,16 +280,19 @@ class VideoRepositoryImpl @Inject constructor(
             // 1. Try dedicated Shorts kiosks
             val candidates = listOf(
                 "https://www.youtube.com/shorts",
-                "https://www.youtube.com/feed/shorts",
-                "https://www.youtube.com/hashtag/shorts"
+                "https://www.youtube.com/feed/shorts"
             )
             for (url in candidates) {
                 try {
                     val kiosk = KioskInfo.getInfo(ServiceList.YouTube, url)
                     val items = kiosk.relatedItems.filterIsInstance<StreamInfoItem>().map { mapToVideoItem(it) }
                     if (items.isNotEmpty()) {
-                        VidlyLog.d("VideoRepository", "Shorts kiosk success via $url : ${items.size} items")
-                        return@withContext PaginatedList(items, kiosk.nextPage)
+                        // Filter out long videos if any somehow crept in
+                        val filtered = items.filter { it.duration in 1..90 } 
+                        if (filtered.isNotEmpty()) {
+                            VidlyLog.d("VideoRepository", "Shorts kiosk success via $url : ${filtered.size} items")
+                            return@withContext PaginatedList(filtered, kiosk.nextPage)
+                        }
                     }
                 } catch (e: Exception) {
                     VidlyLog.d("VideoRepository", "Shorts kiosk $url failed: ${e.message}")
@@ -299,55 +302,50 @@ class VideoRepositoryImpl @Inject constructor(
             // 2. Personalized search fallbacks based on user interests
             try {
                 val topInterests = userInterestDao.getTopInterests(3)
-                if (topInterests.isNotEmpty()) {
-                    val query = topInterests.joinToString(" ") { it.keyword } + " #shorts"
-                    val youtubeService = ServiceList.YouTube
-                    val extractor = youtubeService.getSearchExtractor(query, listOf("videos"), "relevance")
-                    extractor.fetchPage()
-                    val items = extractor.initialPage.items.filterIsInstance<StreamInfoItem>().map { mapToVideoItem(it) }
-                    if (items.isNotEmpty()) {
-                        VidlyLog.d("VideoRepository", "Shorts personalized search success: ${items.size} items for query: $query")
-                        return@withContext PaginatedList(items.shuffled(), extractor.initialPage.nextPage)
-                    }
+                val query = if (topInterests.isNotEmpty()) {
+                    topInterests.joinToString(" ") { it.keyword } + " shorts"
+                } else {
+                    "shorts"
                 }
-            } catch (e: Exception) {
-                VidlyLog.d("VideoRepository", "Shorts personalized search failed: ${e.message}")
-            }
-
-            // 3. General #shorts search fallback
-            try {
+                
                 val youtubeService = ServiceList.YouTube
-                val extractor = youtubeService.getSearchExtractor("#shorts", listOf("videos"), "relevance")
+                val extractor = youtubeService.getSearchExtractor(query, listOf("videos"), "relevance")
                 extractor.fetchPage()
-                val items = extractor.initialPage.items.filterIsInstance<StreamInfoItem>().map { mapToVideoItem(it) }
+                val items = extractor.initialPage.items.filterIsInstance<StreamInfoItem>()
+                    .map { mapToVideoItem(it) }
+                    .filter { it.duration in 1..65 } // Strict duration for shorts
+                
                 if (items.isNotEmpty()) {
-                    VidlyLog.d("VideoRepository", "Shorts general search success: ${items.size} items")
+                    VidlyLog.d("VideoRepository", "Shorts search success: ${items.size} items for query: $query")
                     return@withContext PaginatedList(items.shuffled(), extractor.initialPage.nextPage)
                 }
             } catch (e: Exception) {
-                VidlyLog.d("VideoRepository", "Shorts general search failed: ${e.message}")
+                VidlyLog.d("VideoRepository", "Shorts search failed: ${e.message}")
             }
 
-            // 4. Fallback: use trending but filter to short videos (duration <= 60s) for vertical experience
+            // 3. Fallback: use trending but filter STRICTLY to short videos
             try {
                 val kiosk = KioskInfo.getInfo(ServiceList.YouTube, Constants.YouTube.TRENDING_URL)
                 val all = kiosk.relatedItems.filterIsInstance<StreamInfoItem>().map { mapToVideoItem(it) }
-                val shorts = all.filter { it.duration in 1..70 } // slightly wider margin
-                val result = if (shorts.size >= 5) shorts else all.shuffled().take(20)
-                VidlyLog.d("VideoRepository", "Shorts fallback trending: ${result.size} items (from ${all.size})")
-                return@withContext PaginatedList(result, kiosk.nextPage)
+                val shorts = all.filter { it.duration in 1..62 } // YouTube Shorts are max 60s
+                
+                if (shorts.isNotEmpty()) {
+                    VidlyLog.d("VideoRepository", "Shorts fallback trending: ${shorts.size} items")
+                    return@withContext PaginatedList(shorts.shuffled(), kiosk.nextPage)
+                }
             } catch (e: Exception) {
                 VidlyLog.e("VideoRepository", "Shorts final fallback failed", e)
-                return@withContext PaginatedList(emptyList(), null)
             }
+
+            return@withContext PaginatedList(emptyList(), null)
         }
     }
 
     override suspend fun fetchNextShortsPage(page: Page): PaginatedList<VideoItem> {
         ensureInit()
         return withContext(Dispatchers.IO) {
-            // Try to continue previous Shorts kiosk; if original was trending, continue trending
-            // We assume page was from getShortsVideos – try shorts first, then trending
+            // Try to continue previous Shorts kiosk or search
+            // If the page is from a search or kiosk, KioskInfo.getMoreItems or SearchExtractor.getPage works
             val shortsUrls = listOf(
                 "https://www.youtube.com/shorts",
                 "https://www.youtube.com/feed/shorts"
@@ -355,18 +353,24 @@ class VideoRepositoryImpl @Inject constructor(
             for (url in shortsUrls) {
                 try {
                     val next = KioskInfo.getMoreItems(ServiceList.YouTube, url, page)
-                    val items = next.items.filterIsInstance<StreamInfoItem>().map { mapToVideoItem(it) }
+                    val items = next.items.filterIsInstance<StreamInfoItem>()
+                        .map { mapToVideoItem(it) }
+                        .filter { it.duration in 1..90 }
                     if (items.isNotEmpty()) {
                         return@withContext PaginatedList(items, if (next.hasNextPage()) next.nextPage else null)
                     }
                 } catch (_: Exception) { }
             }
+            
+            // Fallback for search or trending continuation
             try {
+                // trending continuation
                 val next = KioskInfo.getMoreItems(ServiceList.YouTube, Constants.YouTube.TRENDING_URL, page)
-                val items = next.items.filterIsInstance<StreamInfoItem>().map { mapToVideoItem(it) }
-                val shorts = items.filter { it.duration in 1..65 }
-                val result = if (shorts.isNotEmpty()) shorts else items
-                return@withContext PaginatedList(result, if (next.hasNextPage()) next.nextPage else null)
+                val items = next.items.filterIsInstance<StreamInfoItem>()
+                    .map { mapToVideoItem(it) }
+                    .filter { it.duration in 1..65 }
+                
+                return@withContext PaginatedList(items, if (next.hasNextPage()) next.nextPage else null)
             } catch (e: Exception) {
                 VidlyLog.e("VideoRepository", "fetchNextShortsPage failed", e)
                 return@withContext PaginatedList(emptyList(), null)

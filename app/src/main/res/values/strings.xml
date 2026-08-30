@@ -48,7 +48,7 @@
     <!-- Library -->
     <string name="library">Library</string>
     <string name="history">History</string>
-    <string name="subscriptions">Subscriptions</string>
+    <string name="subscriptions">Channels</string>
     <string name="downloads">Downloads</string>
     <string name="favorites">Liked Videos</string>
     <string name="see_all">See all</string>

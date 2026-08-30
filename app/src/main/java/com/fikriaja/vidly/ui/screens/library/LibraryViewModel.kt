@@ -136,6 +136,12 @@ class LibraryViewModel @Inject constructor(
         _offlineSearchQuery.value = query
     }
 
+    fun refresh() {
+        _subscriptionSearchQuery.value = ""
+        _offlineSearchQuery.value = ""
+        syncSubscriptions()
+    }
+
     fun clearWatchedDownloads() {
         viewModelScope.launch {
             val watchedIds = history.value

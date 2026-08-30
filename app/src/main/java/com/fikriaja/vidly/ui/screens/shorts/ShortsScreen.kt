@@ -2,25 +2,23 @@
  * Vidly Project Original (2026)
  * YT Shorts Feature – Vertical swipe feed
  */
+@file:OptIn(UnstableApi::class)
+
 package com.fikriaja.vidly.ui.screens.shorts
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,13 +26,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -43,16 +46,44 @@ import com.fikriaja.vidly.domain.model.VideoItem
 import com.fikriaja.vidly.ui.components.ThumbnailImage
 import com.fikriaja.vidly.ui.components.player.VideoPlayerView
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import com.fikriaja.vidly.ui.screens.player.PlayerViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalFoundationApi::class, UnstableApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ShortsScreen(
     viewModel: ShortsViewModel = hiltViewModel(),
     onVideoClick: (VideoItem) -> Unit = {},
     onChannelClick: (String) -> Unit = {}
 ) {
+    val activity = LocalActivity.current as ComponentActivity
+    val mainPlayerViewModel: PlayerViewModel = hiltViewModel(activity)
+    
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val videos = uiState.videos
+
+    // Lifecycle management to pause player when navigating away or app goes to background
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                viewModel.pause()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.pause()
+        }
+    }
+
+    // Pause main player when Shorts starts
+    LaunchedEffect(Unit) {
+        mainPlayerViewModel.player.pause()
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (uiState.isLoading && videos.isEmpty()) {
@@ -77,13 +108,6 @@ fun ShortsScreen(
             // Sync pager with ViewModel
             LaunchedEffect(pagerState.currentPage) {
                 viewModel.onPageSelected(pagerState.currentPage)
-            }
-
-            // Also listen to ViewModel currentIndex if changed externally
-            LaunchedEffect(uiState.currentIndex) {
-                if (uiState.currentIndex != pagerState.currentPage) {
-                    // pagerState.scrollToPage(uiState.currentIndex)
-                }
             }
 
             VerticalPager(
@@ -120,7 +144,6 @@ fun ShortsScreen(
     }
 }
 
-@UnstableApi
 @Composable
 private fun ShortsPlayerPage(
     video: VideoItem,
@@ -133,7 +156,10 @@ private fun ShortsPlayerPage(
 ) {
     var isPlaying by remember { mutableStateOf(true) }
     var showPlayIcon by remember { mutableStateOf(false) }
+    var isSpeedBoosting by remember { mutableStateOf(false) }
+    var originalSpeed by remember { mutableFloatStateOf(1f) }
     val isFavorite by viewModel.isFavoriteFlow(video.id).collectAsStateWithLifecycle(initialValue = false)
+    val scope = rememberCoroutineScope()
 
     // Keep play state synced with player when page visible
     LaunchedEffect(isCurrentPage) {
@@ -146,15 +172,57 @@ private fun ShortsPlayerPage(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .clickable {
-                if (player.isPlaying) {
-                    viewModel.pause()
-                    isPlaying = false
-                } else {
-                    viewModel.resume()
-                    isPlaying = true
+            .pointerInput(isCurrentPage) {
+                if (!isCurrentPage) return@pointerInput
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    var isLongPress = false
+                    var pointerMoved = false
+                    val job = scope.launch {
+                        delay(500) // Long press threshold
+                        if (!pointerMoved) {
+                            isLongPress = true
+                            isSpeedBoosting = true
+                            originalSpeed = player.playbackParameters.speed
+                            viewModel.setPlaybackSpeed(2f)
+                        }
+                    }
+                    
+                    // Track movement to cancel long press if swiping
+                    var up: androidx.compose.ui.input.pointer.PointerInputChange? = null
+                    while (up == null) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (change.changedToUpIgnoreConsumed()) {
+                            up = change
+                        } else {
+                            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                                pointerMoved = true
+                                if (isLongPress) {
+                                    isLongPress = false
+                                    isSpeedBoosting = false
+                                    viewModel.setPlaybackSpeed(originalSpeed)
+                                }
+                            }
+                        }
+                    }
+                    
+                    job.cancel()
+                    if (isLongPress) {
+                        isSpeedBoosting = false
+                        viewModel.setPlaybackSpeed(originalSpeed)
+                    } else if (up != null && !pointerMoved) {
+                        // Regular tap (only if didn't move much)
+                        if (player.isPlaying) {
+                            viewModel.pause()
+                            isPlaying = false
+                        } else {
+                            viewModel.resume()
+                            isPlaying = true
+                        }
+                        showPlayIcon = true
+                    }
                 }
-                showPlayIcon = true
             }
     ) {
         // Video player – only show when current page, otherwise show thumbnail placeholder
@@ -175,10 +243,34 @@ private fun ShortsPlayerPage(
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
         }
 
+        // 2x Speed Indicator
+        if (isSpeedBoosting) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 80.dp),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.FastForward, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("2x Speed", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
         // Center play/pause icon flash
         if (showPlayIcon) {
             LaunchedEffect(showPlayIcon) {
-                kotlinx.coroutines.delay(600)
+                delay(600)
                 showPlayIcon = false
             }
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -218,7 +310,7 @@ private fun ShortsPlayerPage(
                 .align(Alignment.BottomStart)
                 .fillMaxWidth(0.75f)
                 .navigationBarsPadding()
-                .padding(start = 16.dp, end = 80.dp, bottom = 16.dp),
+                .padding(start = 16.dp, end = 80.dp, bottom = 100.dp), // Increased bottom padding to avoid bottom bar
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Channel row
@@ -284,7 +376,7 @@ private fun ShortsPlayerPage(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(end = 12.dp, bottom = 24.dp),
+                .padding(end = 12.dp, bottom = 110.dp), // Increased bottom padding to avoid bottom bar
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {

@@ -203,6 +203,10 @@ class ShortsViewModel @Inject constructor(
         player.play()
     }
 
+    fun setPlaybackSpeed(speed: Float) {
+        player.setPlaybackSpeed(speed)
+    }
+
     override fun onCleared() {
         super.onCleared()
         player.release()

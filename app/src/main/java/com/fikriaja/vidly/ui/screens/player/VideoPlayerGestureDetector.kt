@@ -32,6 +32,8 @@ fun VideoPlayerGestureDetector(
     onDragCancel: () -> Unit = {},
     onVerticalSwipeLeft: (Float) -> Unit = {},
     onVerticalSwipeRight: (Float) -> Unit = {},
+    onLongPressStart: () -> Unit = {},
+    onLongPressEnd: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val doubleTapTimeout = 300L
@@ -43,15 +45,10 @@ fun VideoPlayerGestureDetector(
                 coroutineScope {
                     var tapCount = 0
                     var tapJob: kotlinx.coroutines.Job? = null
-                    // FIX(MEDIUM): the single-tap timer previously fired on timer
-                    // expiry even when the finger had already started DRAGGING
-                    // (volume/brightness swipes) or was still held down â€” every
-                    // vertical drag also toggled the controls overlay mid-gesture.
-                    // A single tap now requires: exactly one tap, the pointer has
-                    // been LIFTED, and it never moved beyond the touch slop.
                     var tapDownPosition = Offset.Unspecified
                     var pointerLifted = false
                     var pointerMoved = false
+                    var isLongPressed = false
                     
                     awaitPointerEventScope {
                         while (true) {
@@ -64,37 +61,50 @@ fun VideoPlayerGestureDetector(
                                 tapDownPosition = down.position
                                 pointerLifted = false
                                 pointerMoved = false
+                                isLongPressed = false
                                 
                                 val isLeftSide = (down.position.x < size.width / 2)
                                 
+                                val longPressJob = launch {
+                                    delay(500)
+                                    if (tapCount == 1 && !pointerLifted && !pointerMoved) {
+                                        isLongPressed = true
+                                        onLongPressStart()
+                                    }
+                                }
+
                                 if (tapCount >= 2) {
-                                    // Multi-tap detected
+                                    longPressJob.cancel()
                                     down.consume()
                                     if (isLeftSide) onDoubleTapLeft() else onDoubleTapRight()
-                                    
-                                    // After a double tap, we reset to avoid triple-tap confusion
                                     tapCount = 0
                                 } else {
-                                    // First tap, wait to see if it's a double tap
                                     tapJob = launch {
                                         delay(doubleTapTimeout)
-                                        if (tapCount == 1 && pointerLifted && !pointerMoved) {
+                                        if (tapCount == 1 && pointerLifted && !pointerMoved && !isLongPressed) {
                                             onSingleTap()
                                         }
                                         tapCount = 0
                                     }
                                 }
                             } else {
-                                // Track movement + lift for the pending single tap
                                 val change = event.changes.firstOrNull()
                                 if (change != null) {
                                     if (change.changedToUpIgnoreConsumed()) {
                                         pointerLifted = true
+                                        if (isLongPressed) {
+                                            onLongPressEnd()
+                                            isLongPressed = false
+                                        }
                                     }
                                     if (tapDownPosition != Offset.Unspecified &&
                                         (change.position - tapDownPosition).getDistance() > viewConfiguration.touchSlop
                                     ) {
                                         pointerMoved = true
+                                        if (isLongPressed) {
+                                            onLongPressEnd()
+                                            isLongPressed = false
+                                        }
                                     }
                                 }
                             }

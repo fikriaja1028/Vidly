@@ -277,7 +277,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val showTopBarActual by remember(showBars, currentScreen) {
-                    derivedStateOf { showBars && currentScreen !is Destination.Search }
+                    derivedStateOf { showBars && currentScreen !is Destination.Search && currentScreen !is Destination.Shorts }
                 }
                 
                 val barsVisibilityProgress by animateFloatAsState(
@@ -407,7 +407,10 @@ class MainActivity : AppCompatActivity() {
                                     shadowElevation = 16.dp,
                                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
                                 ) {
-                                    VidlyBottomBar(navController = navController)
+                                    VidlyBottomBar(
+                                        navController = navController,
+                                        mainViewModel = mainViewModel
+                                    )
                                 }
                             }
                         }
@@ -688,7 +691,10 @@ private fun LockScreen(onUnlock: () -> Unit) {
 }
 
 @Composable
-fun VidlyBottomBar(navController: androidx.navigation.NavHostController) {
+fun VidlyBottomBar(
+    navController: androidx.navigation.NavHostController,
+    mainViewModel: MainViewModel
+) {
     val items = listOf(
         Triple(Destination.Home, Icons.Default.Home, stringResource(R.string.tab_for_you)),
         Triple(Destination.Shorts, Icons.Default.PlayArrow, "Shorts"),
@@ -707,8 +713,9 @@ fun VidlyBottomBar(navController: androidx.navigation.NavHostController) {
         val currentDestination = navBackStackEntry?.destination
         
         items.forEach { (destination, icon, label) ->
+            val routeRoot = destination.routeRoot
             val isSelected = currentDestination?.hierarchy?.any { 
-                it.route?.contains(destination.routeRoot, ignoreCase = true) == true 
+                it.route?.contains(routeRoot, ignoreCase = true) == true 
             } == true
             
             NavigationBarItem(
@@ -735,7 +742,21 @@ fun VidlyBottomBar(navController: androidx.navigation.NavHostController) {
                     indicatorColor = Color.Transparent // Modern transparent indicator
                 ),
                 onClick = {
-                    if (!isSelected) {
+                    if (isSelected) {
+                        // Already on this tab's hierarchy.
+                        val currentRoute = navBackStackEntry?.destination?.route ?: ""
+                        // If we're not at the root (exactly the destination class), pop back.
+                        // Or if it's Search, check if query is different.
+                        val isAtRoot = currentRoute.endsWith(routeRoot)
+                        
+                        if (!isAtRoot) {
+                            // Pop to root of this tab
+                            navController.popBackStack(destination, inclusive = false)
+                        } else {
+                            // At root, trigger refresh
+                            mainViewModel.triggerTabRefresh(routeRoot)
+                        }
+                    } else {
                         navController.navigate(destination) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true

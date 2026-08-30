@@ -8,6 +8,7 @@ package com.fikriaja.vidly.ui.navigation
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -40,6 +41,7 @@ import com.fikriaja.vidly.ui.screens.subscriptions.SubscriptionsScreen
 import com.fikriaja.vidly.ui.screens.subscriptions.SubscriptionFeedScreen
 import com.fikriaja.vidly.ui.screens.subscriptions.SubscriptionsFeedViewModel
 import com.fikriaja.vidly.ui.screens.shorts.ShortsScreen
+import com.fikriaja.vidly.ui.screens.shorts.ShortsViewModel
 
 import androidx.navigation.toRoute
 
@@ -112,6 +114,15 @@ fun NavGraph(
     ) {
         composable<Destination.Home> {
             val viewModel: HomeViewModel = hiltViewModel()
+            
+            LaunchedEffect(Unit) {
+                mainViewModel.refreshTabEvent.collect { tab ->
+                    if (tab == Destination.Home.routeRoot) {
+                        viewModel.refresh()
+                    }
+                }
+            }
+
             HomeScreen(
                 viewModel = viewModel,
                 libraryViewModel = libraryViewModel,
@@ -134,6 +145,15 @@ fun NavGraph(
         }
         composable<Destination.Subscriptions> {
             val viewModel: SubscriptionsFeedViewModel = hiltViewModel()
+            
+            LaunchedEffect(Unit) {
+                mainViewModel.refreshTabEvent.collect { tab ->
+                    if (tab == Destination.Subscriptions.routeRoot) {
+                        viewModel.refresh()
+                    }
+                }
+            }
+
             SubscriptionFeedScreen(
                 viewModel = viewModel,
                 libraryViewModel = libraryViewModel,
@@ -171,6 +191,15 @@ fun NavGraph(
             )
         }
         composable<Destination.Library> {
+            
+            LaunchedEffect(Unit) {
+                mainViewModel.refreshTabEvent.collect { tab ->
+                    if (tab == Destination.Library.routeRoot) {
+                        libraryViewModel.refresh()
+                    }
+                }
+            }
+
             LibraryScreen(
                 viewModel = libraryViewModel,
                 onBarsVisibilityChange = onBarsVisibilityChange,
@@ -192,7 +221,18 @@ fun NavGraph(
             )
         }
         composable<Destination.Shorts> {
+            val viewModel: ShortsViewModel = hiltViewModel()
+            
+            LaunchedEffect(Unit) {
+                mainViewModel.refreshTabEvent.collect { tab ->
+                    if (tab == Destination.Shorts.routeRoot) {
+                        viewModel.loadShorts(refresh = true)
+                    }
+                }
+            }
+
             ShortsScreen(
+                viewModel = viewModel,
                 onVideoClick = { video -> playerViewModel.loadVideo(video) },
                 onChannelClick = { url -> navController.navigate(Destination.Channel(url)) }
             )
@@ -301,7 +341,15 @@ fun NavGraph(
         composable<Destination.Search> { backStackEntry ->
             val search: Destination.Search = backStackEntry.toRoute()
             val viewModel: SearchViewModel = hiltViewModel()
-            val mainViewModel: MainViewModel = hiltViewModel(activity)
+            
+            LaunchedEffect(Unit) {
+                mainViewModel.refreshTabEvent.collect { tab ->
+                    if (tab == Destination.Search("").routeRoot) {
+                        viewModel.onQueryChange("")
+                    }
+                }
+            }
+
             val updateViewModel: UpdateViewModel = hiltViewModel(activity)
 
             androidx.compose.runtime.LaunchedEffect(search.query) {
